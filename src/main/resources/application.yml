@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: cargo-pulse
+
+  profiles:
+    active: ${CARGOPULSE_PROFILE:dev}
