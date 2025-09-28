@@ -4,6 +4,10 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
          https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.23.xsd">
 
-<!--    <include file="db/changelog/changes/"/>-->
+    <include file="db/changelog/changes/001_create_table_user_account.sql"/>
+    <include file="db/changelog/changes/002_create_table_shipment.sql"/>
+    <include file="db/changelog/changes/003_create_table_shipment_item.sql"/>
+    <include file="db/changelog/changes/004_create_table_tracking_event.sql"/>
+    <include file="db/changelog/changes/005_create_table_notification.sql"/>
 
 </databaseChangeLog>
