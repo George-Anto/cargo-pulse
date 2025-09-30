@@ -9,5 +9,7 @@
     <include file="db/changelog/changes/003_create_table_shipment_item.sql"/>
     <include file="db/changelog/changes/004_create_table_tracking_event.sql"/>
     <include file="db/changelog/changes/005_create_table_notification.sql"/>
+    <include file="db/changelog/changes/006_create_table_role.sql"/>
+    <include file="db/changelog/changes/007_create_table_user_role.sql"/>
 
 </databaseChangeLog>

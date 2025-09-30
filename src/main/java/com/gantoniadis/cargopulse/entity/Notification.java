@@ -1,5 +1,6 @@
 package com.gantoniadis.cargopulse.entity;
 
+import com.gantoniadis.cargopulse.user.entity.UserAccount;
 import com.gantoniadis.cargopulse.util.NotificationChannel;
 import com.gantoniadis.cargopulse.util.NotificationStatus;
 import jakarta.persistence.*;

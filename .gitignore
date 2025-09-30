@@ -52,7 +52,7 @@ spring-boot-devtools.properties
 *.jar
 *.war
 
-# Eclipse
+# Eclipsecls
 .metadata/
 bin/
 
@@ -61,3 +61,5 @@ bin/
 
 # Testcontainers / Docker-related
 *.pid
+
+jwt-secret.properties

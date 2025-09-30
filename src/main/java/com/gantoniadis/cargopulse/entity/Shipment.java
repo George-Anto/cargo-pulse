@@ -1,5 +1,6 @@
 package com.gantoniadis.cargopulse.entity;
 
+import com.gantoniadis.cargopulse.user.entity.UserAccount;
 import com.gantoniadis.cargopulse.util.ShipmentStatus;
 import jakarta.persistence.*;
 import lombok.*;

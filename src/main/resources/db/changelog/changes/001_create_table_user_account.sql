@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS user_account (
                               password VARCHAR(255) NOT NULL,
                               full_name VARCHAR(100),
                               email VARCHAR(100) UNIQUE,
-                              role VARCHAR(50) NOT NULL DEFAULT 'USER',
                               created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                               updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
