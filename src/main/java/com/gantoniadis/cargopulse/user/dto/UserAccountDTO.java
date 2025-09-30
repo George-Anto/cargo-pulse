@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.Set;
 
@@ -16,10 +17,13 @@ import java.util.Set;
 @Slf4j
 public class UserAccountDTO implements UserDetails {
 
-    private Integer id;
     private String username;
     @JsonIgnore
     private String password;
+    private String fullName;
+    private String email;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
     private Set<RoleDTO> roles;
 
     public String getRolesNames() {
@@ -41,6 +45,7 @@ public class UserAccountDTO implements UserDetails {
     public String getPassword() {
         return password;
     }
+
     @Override
     public String getUsername() {
         return username;
@@ -74,7 +79,6 @@ public class UserAccountDTO implements UserDetails {
     @Override
     public String toString() {
         return "UserDTO{" +
-                "id=" + id +
                 ", username='" + username + '\'' +
                 ", roles=" + roles +
                 '}';
