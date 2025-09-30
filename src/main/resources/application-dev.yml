@@ -25,11 +25,6 @@ spring:
     enabled: true
     change-log: classpath:db/changelog/changelog-master.xml
 
-  security:
-    user:
-      name: admin
-      password: admin
-
 management:
   endpoints:
     web:
