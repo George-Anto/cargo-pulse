@@ -1,6 +1,7 @@
 package com.gantoniadis.cargopulse.exception;
 
 import com.gantoniadis.cargopulse.security.exception.CustomAuthenticationException;
+import com.gantoniadis.cargopulse.user.exception.RequestDataException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
@@ -89,6 +90,12 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<ErrorResponse> handleAuthenticationException(Exception ex, HttpServletRequest request) {
         return buildResponse(HttpStatus.UNAUTHORIZED, ex.getMessage(), request.getRequestURI());
+    }
+
+    // Custom application-specific bad requests/validation failures
+    @ExceptionHandler(RequestDataException.class)
+    public ResponseEntity<ErrorResponse> handleRequestDataException(RequestDataException ex, HttpServletRequest request) {
+        return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request.getRequestURI());
     }
 
     // Helper method to build a standard error response
