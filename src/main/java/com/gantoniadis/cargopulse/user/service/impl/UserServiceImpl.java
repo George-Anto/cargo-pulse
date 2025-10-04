@@ -72,7 +72,6 @@ public class UserServiceImpl implements UserService {
                 .username(request.getUsername())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .roles(userRoles)
-                // Assuming AddUserRequestDTO also contains full name and email
                 .fullName(request.getFullName())
                 .email(request.getEmail())
                 .build();

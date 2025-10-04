@@ -13,6 +13,15 @@ spring:
       idle-timeout: 600000
       max-lifetime: 1800000
 
+  data:
+    redis:
+      host: ${CARGOPULSE_REDIS_HOST_URL:${redis.dev.host}}
+      port: ${CARGOPULSE_REDIS_PORT:${redis.dev.port}}
+      password: ${CARGOPULSE_REDIS_PASSWORD:${redis.dev.secret}}
+      # Disable ssl for local redis
+      ssl:
+        enabled: true
+
   jpa:
     hibernate:
       ddl-auto: validate
@@ -24,6 +33,10 @@ spring:
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/changelog-master.xml
+
+jwt:
+  secret: ${CARGOPULSE_JWT_SECRET:${jwt.dev.secret}}
+  expiration-ms: 3600000 # 1 hour
 
 management:
   endpoints:

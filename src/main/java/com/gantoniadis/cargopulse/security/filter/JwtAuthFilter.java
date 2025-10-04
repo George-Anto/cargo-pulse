@@ -1,5 +1,6 @@
 package com.gantoniadis.cargopulse.security.filter;
 
+import com.gantoniadis.cargopulse.security.service.JwtBlocklistService;
 import com.gantoniadis.cargopulse.security.service.JwtService;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -27,6 +28,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
+    private final JwtBlocklistService blocklistService;
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -37,7 +39,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         final String AUTHORIZATION_HEADER_KEY = "Authorization";
         final String BEARER = "Bearer ";
 
-        if (request.getServletPath().contains("/auth")) {
+        // 1. Check for OPTION calls early (CORS preflight)
+        if (request.getMethod().equalsIgnoreCase("OPTIONS")) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -45,42 +48,47 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         final String authHeader = request.getHeader(AUTHORIZATION_HEADER_KEY);
         final String jwt;
         String username;
-        if (request.getMethod().equalsIgnoreCase("OPTIONS")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
+
+        // 2. If no header or bad prefix, let the chain continue unauthenticated
         if (authHeader == null ||!authHeader.startsWith(BEARER)) {
-            log.warn("Unauthorized request made. Method: {}, URI: {}, Remote Address: {}",
-                    request.getMethod(),
-                    request.getRequestURI(),
-                    request.getRemoteAddr()
-            );
+            log.debug("No JWT found in request. Allowing chain to continue unauthenticated.");
             filterChain.doFilter(request, response);
             return;
         }
 
         jwt = authHeader.substring(BEARER.length());
 
-        try {
-            username = jwtService.extractUsername(jwt);
-        } catch (JwtException e) {
-            log.warn("Could not extract username from JWT. {}", e.getLocalizedMessage());
+        // 3. Check for Blocklisted Token
+        if (blocklistService.isTokenBlocklisted(jwt)) {
+            log.warn("Unauthorized request made. Token is blocklisted.");
             filterChain.doFilter(request, response);
             return;
         }
 
+        // 4. Extract Username and handle exceptions
+        try {
+            username = jwtService.extractUsername(jwt);
+        } catch (JwtException e) {
+            log.warn("JWT parsing failed: {}", e.getLocalizedMessage());
+            // DO NOT set authentication. Let chain continue unauthenticated.
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // 5. Authentication attempt (only runs if token is not blocked and username exists)
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails;
 
             try {
                 userDetails = this.userDetailsService.loadUserByUsername(username);
             } catch (UsernameNotFoundException e) {
-                log.warn("Could not load User. {}", e.getLocalizedMessage());
-                filterChain.doFilter(request, response);
+                log.warn("User not found: {}", username);
+                filterChain.doFilter(request, response); // Continue unauthenticated
                 return;
             }
 
             if (jwtService.isTokenValid(jwt, userDetails)) {
+                // SUCCESS: Set the authentication context
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         userDetails,
                         jwt,
@@ -89,13 +97,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             } else {
-                log.warn("Unauthorized request made. Invalid token. Username: {}, Method: {}, URI: {}, Remote Address: {}",
-                        username, request.getMethod(), request.getRequestURI(), request.getRemoteAddr());
+                log.warn("Token validation failed for user: {}", username);
             }
-        } else {
-            log.warn("Unauthorized request made. Missing or invalid token. Method: {}, URI: {}, Remote Address: {}",
-                    request.getMethod(), request.getRequestURI(), request.getRemoteAddr());
         }
+
+        // 6. Continue the filter chain. If context was set (SUCCESS), the request proceeds.
+        // If context was NOT set (FAILURE), the request proceeds to fail at FilterSecurityInterceptor,
+        // which triggers the AuthenticationEntryPoint.
         filterChain.doFilter(request, response);
     }
 }

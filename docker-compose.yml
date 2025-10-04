@@ -1,0 +1,17 @@
+#Run it with: docker-compose up -d
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7.2-alpine
+    container_name: cargo_pulse_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass test_pass
+
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:

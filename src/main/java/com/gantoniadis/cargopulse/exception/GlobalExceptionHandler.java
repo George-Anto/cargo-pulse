@@ -2,6 +2,10 @@ package com.gantoniadis.cargopulse.exception;
 
 import com.gantoniadis.cargopulse.security.exception.CustomAuthenticationException;
 import com.gantoniadis.cargopulse.user.exception.RequestDataException;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.security.SignatureException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
@@ -96,6 +100,24 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RequestDataException.class)
     public ResponseEntity<ErrorResponse> handleRequestDataException(RequestDataException ex, HttpServletRequest request) {
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request.getRequestURI());
+    }
+
+    // Handles specific JWT parsing failures (invalid format, bad signature)
+    @ExceptionHandler({
+            MalformedJwtException.class,
+            SignatureException.class,
+            UnsupportedJwtException.class,
+    })
+    public ResponseEntity<ErrorResponse> handleJwtParsingException(Exception ex, HttpServletRequest request) {
+        log.warn("JWT Parsing Failure: {} URI: {}", ex.getMessage(), request.getRequestURI());
+        return buildResponse(HttpStatus.BAD_REQUEST, "Invalid or Tampered Token: " + ex.getMessage(), request.getRequestURI());
+    }
+
+    // Handles ExpiredJwtException. Maps to HTTP 401 Unauthorized - often used when token is expired
+    @ExceptionHandler(ExpiredJwtException.class)
+    public ResponseEntity<ErrorResponse> handleExpiredJwtException(ExpiredJwtException ex, HttpServletRequest request) {
+        log.warn("Expired Token Used: {} URI: {}", ex.getMessage(), request.getRequestURI());
+        return buildResponse(HttpStatus.UNAUTHORIZED, "Token has expired.", request.getRequestURI());
     }
 
     // Helper method to build a standard error response

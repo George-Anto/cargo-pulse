@@ -2,62 +2,36 @@ package com.gantoniadis.cargopulse.security.service;
 
 import com.gantoniadis.cargopulse.security.dto.AuthenticationRequestDTO;
 import com.gantoniadis.cargopulse.security.dto.AuthenticationResponseDTO;
-import com.gantoniadis.cargopulse.user.dto.UserAccountDTO;
 import com.gantoniadis.cargopulse.security.exception.CustomAuthenticationException;
-import com.gantoniadis.cargopulse.user.mapper.UserAccountMapper;
-import com.gantoniadis.cargopulse.user.repository.UserAccountRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Service;
+import com.gantoniadis.cargopulse.user.dto.UserAccountDTO;
 
-import java.util.Collections;
+/**
+ * Defines the contract for core authentication and security-related operations.
+ */
+public interface AuthService {
 
-@Service
-@RequiredArgsConstructor
-@Slf4j
-public class AuthService {
+    /**
+     * Authenticates a user using credentials and generates a JWT upon success.
+     *
+     * @param request The DTO containing the username and password.
+     * @return An AuthenticationResponseDTO containing the JWT and user details.
+     * @throws CustomAuthenticationException If authentication fails (bad credentials, user not found).
+     */
+    AuthenticationResponseDTO authenticate(AuthenticationRequestDTO request) throws CustomAuthenticationException;
 
-    private final UserAccountRepository userAccountRepository;
-    private final JwtService jwtService;
-    private final AuthenticationManager authenticationManager;
-    private final UserAccountMapper userAccountMapper;
+    /**
+     * Retrieves the details of the currently authenticated user from the SecurityContext.
+     *
+     * @return The UserAccountDTO of the authenticated user.
+     * @throws CustomAuthenticationException If no user is found in the context or token is invalid.
+     */
+    UserAccountDTO getAuthenticatedUser() throws CustomAuthenticationException;
 
-    public AuthenticationResponseDTO authenticate(AuthenticationRequestDTO request) throws CustomAuthenticationException {
-        try {
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
-            );
-        } catch (AuthenticationException e) {
-            throw new CustomAuthenticationException("User '" + request.getUsername() + "' could not be authenticated");
-        }
-
-        var user = userAccountRepository.findByUsername(request.getUsername()).orElseThrow(
-                () -> new CustomAuthenticationException("User " + request.getUsername() + " not found in the database")
-        );
-        var userDTO = userAccountMapper.userToUserDTO(user);
-        log.info("Successful authentication of user '{}' with roles: {}", userDTO.getUsername(), userDTO.getRolesNames());
-
-        var jwt = jwtService.generateToken(Collections.singletonMap("roles", userDTO.getRoles()), userDTO);
-        return AuthenticationResponseDTO.builder()
-                .jwt(jwt)
-                .username(userDTO.getUsername())
-                .roles(userDTO.getRoles())
-                .build();
-    }
-
-    public UserAccountDTO getAuthenticatedUser() {
-        try {
-            String token = (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
-            String username = jwtService.extractUsername(token);
-            return userAccountMapper.userToUserDTO(userAccountRepository.findByUsername(username).
-                    orElseThrow(() ->
-                            new CustomAuthenticationException("No authorized User found for this action.")));
-        } catch (Exception e) {
-            throw new CustomAuthenticationException("No authorized User found for this action.");
-        }
-    }
+    /**
+     * Extracts the JWT from the Authorization header and adds it to the blocklist (revokes it).
+     * Clears the Spring Security context upon processing.
+     *
+     * @param authHeader The raw value of the Authorization header (e.g., "Bearer <token>").
+     */
+    void logout(String authHeader);
 }

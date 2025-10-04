@@ -62,4 +62,4 @@ bin/
 # Testcontainers / Docker-related
 *.pid
 
-jwt-secret.properties
+secrets.properties

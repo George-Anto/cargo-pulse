@@ -1,4 +1,4 @@
-package com.gantoniadis.cargopulse.security.service;
+package com.gantoniadis.cargopulse.security.service.impl;
 
 import com.gantoniadis.cargopulse.user.mapper.UserAccountMapper;
 import com.gantoniadis.cargopulse.user.repository.UserAccountRepository;

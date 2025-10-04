@@ -1,6 +1,7 @@
 package com.gantoniadis.cargopulse.security.config;
 
 import com.gantoniadis.cargopulse.security.filter.JwtAuthFilter;
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -52,6 +53,7 @@ public class SecurityConfig {
                         .authenticationEntryPoint(unauthorizedHandler)
                 )
                 .authorizeHttpRequests(auth -> auth
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(AUTH_PATH).permitAll()
                         .requestMatchers(HttpMethod.POST, REGISTER_ENDPOINT).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
