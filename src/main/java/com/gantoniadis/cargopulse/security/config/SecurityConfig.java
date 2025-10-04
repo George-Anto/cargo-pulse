@@ -3,6 +3,7 @@ package com.gantoniadis.cargopulse.security.config;
 import com.gantoniadis.cargopulse.security.filter.JwtAuthFilter;
 import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -20,8 +21,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.http.HttpHeaders;
 
 import java.security.SecureRandom;
+import java.util.List;
 
 @Configuration
 @RequiredArgsConstructor
@@ -32,6 +38,12 @@ public class SecurityConfig {
     private final AuthenticationEntryPoint unauthorizedHandler;
     private final UserDetailsService userDetailsService;
 
+    @Value("${host.url.frontend}")
+    private String frontendUrl;
+    @Value("${host.url.mobile-app}")
+    private String mobileAppUrl;
+    @Value("${host.url.frontend-local}")
+    private String localFrontendUrl;
 
     private static final String[] SWAGGER_WHITELIST = {
             "/swagger-ui/**",
@@ -49,6 +61,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(unauthorizedHandler)
                 )
@@ -81,5 +94,42 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12, new SecureRandom());
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+
+        final List<String> allowedOriginsList = List.of(
+                frontendUrl,
+                mobileAppUrl,
+                localFrontendUrl
+        );
+
+        configuration.setAllowedOrigins(allowedOriginsList);
+
+        // Allowed Methods
+        configuration.setAllowedMethods(List.of(
+                HttpMethod.GET.name(), HttpMethod.POST.name(),
+                HttpMethod.PUT.name(), HttpMethod.DELETE.name(),
+                HttpMethod.PATCH.name(), HttpMethod.OPTIONS.name()
+        ));
+
+        // Allowed Headers
+        configuration.setAllowedHeaders(List.of(
+                HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, HttpHeaders.ACCEPT
+        ));
+
+        // Exposed Headers
+        configuration.setExposedHeaders(List.of(HttpHeaders.AUTHORIZATION));
+
+        // Allow credentials (required for cookies, but often set to false for JWT)
+        configuration.setAllowCredentials(false);
+
+        // Define which URL paths this configuration applies to
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+
+        return source;
     }
 }

@@ -45,3 +45,9 @@ management:
   endpoint:
     health:
       show-details: never
+
+host:
+  url:
+    frontend: ${CARGOPULSE_FRONTEND_URL:https://cargo-pulse.com}
+    mobile-app: ${CARGOPULSE_MOBILE_APP_URL:app://cargopulse.mobile}
+    frontend-local: ${CARGOPULSE_LOCAL_FRONTEND_URL:http://localhost:4200}
