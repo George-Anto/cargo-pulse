@@ -56,6 +56,7 @@ public class SecurityConfig {
     };
     private static final String REGISTER_ENDPOINT = "/user/register";
     private static final String AUTH_PATH = "/api/auth/**";
+    private static final String ACTUATOR_PROMETHEUS = "/actuator/prometheus";
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -71,6 +72,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, REGISTER_ENDPOINT).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(SWAGGER_WHITELIST).permitAll()
+                        .requestMatchers(ACTUATOR_PROMETHEUS).permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
