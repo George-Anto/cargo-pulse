@@ -20,6 +20,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -45,6 +46,8 @@ public class SecurityConfig {
     @Value("${host.url.frontend-local}")
     private String localFrontendUrl;
 
+    @Value("${security.prometheus.ip-expression}")
+    private String prometheusIpExpression;
     private static final String[] SWAGGER_WHITELIST = {
             "/swagger-ui/**",
             "/swagger-ui.html",
@@ -57,6 +60,7 @@ public class SecurityConfig {
     private static final String REGISTER_ENDPOINT = "/user/register";
     private static final String AUTH_PATH = "/api/auth/**";
     private static final String ACTUATOR_PROMETHEUS = "/actuator/prometheus";
+    private static final String ALL_PATHS = "/**";
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -70,9 +74,11 @@ public class SecurityConfig {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(AUTH_PATH).permitAll()
                         .requestMatchers(HttpMethod.POST, REGISTER_ENDPOINT).permitAll()
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, ALL_PATHS).permitAll()
                         .requestMatchers(SWAGGER_WHITELIST).permitAll()
-                        .requestMatchers(ACTUATOR_PROMETHEUS).permitAll()
+                        .requestMatchers(ACTUATOR_PROMETHEUS).access(
+                                new WebExpressionAuthorizationManager(prometheusIpExpression)
+                        )
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -130,7 +136,7 @@ public class SecurityConfig {
 
         // Define which URL paths this configuration applies to
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+        source.registerCorsConfiguration(ALL_PATHS, configuration);
 
         return source;
     }
