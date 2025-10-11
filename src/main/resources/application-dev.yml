@@ -35,8 +35,8 @@ spring:
 
 jwt:
   secret: ${CARGOPULSE_JWT_SECRET:${jwt.dev.secret}}
-  expiration-ms: 900000 # 15 minutes
-  refresh-expiration-ms: 604800000 # 7 days (7 * 24 * 60 * 60 * 1000)
+  expiration-ms: 900_000 # 15 minutes
+  refresh-expiration-ms: 604_800_000 # 7 days (7 * 24 * 60 * 60 * 1000)
 
 management:
   endpoints:

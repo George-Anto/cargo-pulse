@@ -6,6 +6,7 @@ import com.gantoniadis.cargopulse.security.exception.CustomAuthenticationExcepti
 import com.gantoniadis.cargopulse.security.service.AuthService;
 import com.gantoniadis.cargopulse.security.service.JwtBlocklistService;
 import com.gantoniadis.cargopulse.security.service.JwtService;
+import com.gantoniadis.cargopulse.security.service.RefreshTokenService;
 import com.gantoniadis.cargopulse.user.dto.UserAccountDTO;
 import com.gantoniadis.cargopulse.user.mapper.UserAccountMapper;
 import com.gantoniadis.cargopulse.user.repository.UserAccountRepository;
