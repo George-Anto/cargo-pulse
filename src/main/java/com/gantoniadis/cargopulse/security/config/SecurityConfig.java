@@ -2,6 +2,7 @@ package com.gantoniadis.cargopulse.security.config;
 
 import com.gantoniadis.cargopulse.security.filter.JwtAuthFilter;
 import com.gantoniadis.cargopulse.security.filter.MobileEndpointOriginFilter;
+import com.gantoniadis.cargopulse.security.filter.WebEndpointOriginFilter;
 import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,6 +39,7 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
     private final MobileEndpointOriginFilter mobileEndpointOriginFilter;
+    private final WebEndpointOriginFilter webEndpointOriginFilter;
     private final AuthenticationEntryPoint unauthorizedHandler;
     private final UserDetailsService userDetailsService;
 
@@ -45,8 +47,6 @@ public class SecurityConfig {
     private String frontendUrl;
     @Value("${host.url.mobile-app}")
     private String mobileAppUrl;
-    @Value("${host.url.frontend-local}")
-    private String localFrontendUrl;
 
     @Value("${security.prometheus.ip-expression}")
     private String prometheusIpExpression;
@@ -85,6 +85,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(mobileEndpointOriginFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(webEndpointOriginFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
@@ -112,8 +113,7 @@ public class SecurityConfig {
 
         final List<String> allowedOriginsList = List.of(
                 frontendUrl,
-                mobileAppUrl,
-                localFrontendUrl
+                mobileAppUrl
         );
 
         configuration.setAllowedOrigins(allowedOriginsList);
