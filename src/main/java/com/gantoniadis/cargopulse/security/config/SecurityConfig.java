@@ -1,6 +1,7 @@
 package com.gantoniadis.cargopulse.security.config;
 
 import com.gantoniadis.cargopulse.security.filter.JwtAuthFilter;
+import com.gantoniadis.cargopulse.security.filter.MobileEndpointOriginFilter;
 import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,6 +37,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final MobileEndpointOriginFilter mobileEndpointOriginFilter;
     private final AuthenticationEntryPoint unauthorizedHandler;
     private final UserDetailsService userDetailsService;
 
@@ -61,7 +63,6 @@ public class SecurityConfig {
     private static final String AUTH_PATH = "/api/auth/**";
     private static final String ACTUATOR_PROMETHEUS = "/actuator/prometheus";
     private static final String ALL_PATHS = "/**";
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -83,6 +84,7 @@ public class SecurityConfig {
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(authenticationProvider())
+                .addFilterBefore(mobileEndpointOriginFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
@@ -125,7 +127,7 @@ public class SecurityConfig {
 
         // Allowed Headers
         configuration.setAllowedHeaders(List.of(
-                HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, HttpHeaders.ACCEPT
+                HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, HttpHeaders.ACCEPT, "X-Refresh-Token"
         ));
 
         // Exposed Headers

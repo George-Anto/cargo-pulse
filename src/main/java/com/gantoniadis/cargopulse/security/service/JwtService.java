@@ -33,6 +33,8 @@ public interface JwtService {
      */
     String generateToken(Map<String, Object> extraClaims, UserDetails userDetails);
 
+    String generateRefreshToken(UserDetails userDetails);
+
     /**
      * Validates if a token is authentic and has not expired for a given user.
      * @param token The raw JWT string.
@@ -41,10 +43,14 @@ public interface JwtService {
      */
     boolean isTokenValid(String token, UserDetails userDetails);
 
+    boolean isTokenExpired(String token);
+
     /**
      * Extracts the expiration date from the JWT token.
      * @param token The raw JWT string.
      * @return The expiration Date object.
      */
     Date extractExpiration(String token);
+
+    long getRefreshExpiration();
 }

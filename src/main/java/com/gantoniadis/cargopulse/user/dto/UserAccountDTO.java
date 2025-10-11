@@ -1,6 +1,5 @@
 package com.gantoniadis.cargopulse.user.dto;
 
-
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Builder;
 import lombok.Data;
@@ -17,6 +16,8 @@ import java.util.Set;
 @Slf4j
 public class UserAccountDTO implements UserDetails {
 
+    @JsonIgnore
+    private Long id;
     private String username;
     @JsonIgnore
     private String password;

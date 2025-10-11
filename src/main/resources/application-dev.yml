@@ -18,9 +18,8 @@ spring:
       host: ${CARGOPULSE_REDIS_HOST_URL:${redis.dev.host}}
       port: ${CARGOPULSE_REDIS_PORT:${redis.dev.port}}
       password: ${CARGOPULSE_REDIS_PASSWORD:${redis.dev.secret}}
-      # Disable ssl for local redis
       ssl:
-        enabled: true
+        enabled: true # Disable ssl for local redis
 
   jpa:
     hibernate:
@@ -36,7 +35,8 @@ spring:
 
 jwt:
   secret: ${CARGOPULSE_JWT_SECRET:${jwt.dev.secret}}
-  expiration-ms: 3600000 # 1 hour
+  expiration-ms: 900000 # 15 minutes
+  refresh-expiration-ms: 604800000 # 7 days (7 * 24 * 60 * 60 * 1000)
 
 management:
   endpoints:
@@ -54,5 +54,7 @@ host:
     frontend-local: ${CARGOPULSE_LOCAL_FRONTEND_URL:http://localhost:4200}
 
 security:
+  cookie:
+    transfer: false
   prometheus:
     ip-expression: ${CARGO_PULSE_PROMETHEUS_IP:hasIpAddress('127.0.0.1')}

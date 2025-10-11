@@ -15,6 +15,8 @@ import java.util.Set;
 public class AuthenticationResponseDTO {
 
     private String jwt;
+    // Will be null for web clients
+    private String refreshToken;
     private String username;
     private Set<RoleDTO> roles;
 }

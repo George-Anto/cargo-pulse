@@ -30,7 +30,7 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
         String authErrorMessage = authException.getMessage();
 
         // 1. Log the error
-        log.error("Authentication failure for '{}' endpoint: {} - {} and message: {}",
+        log.warn("Authentication failure for '{}' endpoint: {} - {} and message: {}",
                 request.getRequestURI(),
                 status.value(),
                 status.getReasonPhrase(),

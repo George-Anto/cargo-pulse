@@ -22,6 +22,23 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
                                     @NonNull FilterChain filterChain)
             throws ServletException, IOException {
 
+        // For the swagger requests, just log their details only in debug level
+        if (request.getRequestURI().toLowerCase().contains("swagger")) {
+
+            log.debug("Incoming request: method={}, uri={}, from={}",
+                    request.getMethod(),
+                    request.getRequestURI(),
+                    request.getRemoteAddr());
+
+            log.debug("Headers: {}", Collections.list(request.getHeaderNames()));
+
+            filterChain.doFilter(request, response);
+
+            log.debug("Response status={} for {}", response.getStatus(), request.getRequestURI());
+
+            return;
+        }
+
         log.info("Incoming request: method={}, uri={}, from={}",
                 request.getMethod(),
                 request.getRequestURI(),
