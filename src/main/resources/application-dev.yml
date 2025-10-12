@@ -57,8 +57,6 @@ security:
   mobile-secret-header-value: ${CARGOPULSE_MOBILE_SECURITY_KEY_VALUE:${mobile.dev.secret.header.value}}
   cookie:
     transfer: false
-  prometheus:
-    ip-expression: ${CARGOPULSE_PROMETHEUS_IP:hasIpAddress('127.0.0.1')}
 
 swagger:
   path: /swagger-ui/index.html
@@ -67,6 +65,7 @@ swagger:
 
 monitoring:
   prometheus:
+    ip-expression: ${CARGOPULSE_PROMETHEUS_IP:hasIpAddress('127.0.0.1')}
     port: ${CARGOPULSE_PROMETHEUS_PORT:9090}
   grafana:
     port: ${CARGOPULSE_GRAFANA_PORT:3000}

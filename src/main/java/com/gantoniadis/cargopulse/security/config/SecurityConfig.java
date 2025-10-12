@@ -50,7 +50,7 @@ public class SecurityConfig {
     @Value("${host.url.mobile-app}")
     private String mobileAppUrl;
 
-    @Value("${security.prometheus.ip-expression}")
+    @Value("${monitoring.prometheus.ip-expression}")
     private String prometheusIpExpression;
     private static final String[] SWAGGER_WHITELIST = {
             "/swagger-ui/**",
