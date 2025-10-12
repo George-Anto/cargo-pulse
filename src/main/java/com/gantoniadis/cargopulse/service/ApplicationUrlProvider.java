@@ -36,7 +36,7 @@ public class ApplicationUrlProvider implements EnvironmentAware {
         this.applicationBaseUrl = String.format("%s://%s:%d", protocol, host, port);
     }
 
-    private String getDynamicHostAddress() {
+    public String getDynamicHostAddress() {
         try {
             return InetAddress.getLocalHost().getHostAddress();
         } catch (UnknownHostException e) {

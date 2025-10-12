@@ -21,7 +21,7 @@ services:
     image: prom/prometheus:latest
     container_name: cargo_pulse_prometheus
     ports:
-      - "9090:9090"
+      - "${CARGOPULSE_PROMETHEUS_PORT:-9090}:9090"
     volumes:
       # Mount the custom configuration file
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -51,7 +51,7 @@ services:
     image: grafana/grafana:latest
     container_name: cargo_pulse_grafana
     ports:
-      - "3000:3000"
+      - "${CARGOPULSE_GRAFANA_PORT:-3000}:3000"
     environment:
       # Use default values if environment variables are not set
       - GF_SECURITY_ADMIN_USER=${CARGOPULSE_GRAFANA_USER:-admin}

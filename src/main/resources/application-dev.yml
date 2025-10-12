@@ -64,3 +64,9 @@ swagger:
   path: /swagger-ui/index.html
   requests:
     enabled: true # Must be 'true' or 'false'
+
+monitoring:
+  prometheus:
+    port: ${CARGOPULSE_PROMETHEUS_PORT:9090}
+  grafana:
+    port: ${CARGOPULSE_GRAFANA_PORT:3000}

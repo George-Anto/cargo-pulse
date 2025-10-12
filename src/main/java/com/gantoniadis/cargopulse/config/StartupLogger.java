@@ -21,14 +21,27 @@ public class StartupLogger implements ApplicationListener<ApplicationReadyEvent>
     @Value("${swagger.path}")
     private String swaggerPath;
 
+    @Value("${monitoring.prometheus.port}")
+    private int prometheusPort;
+
+    @Value("${monitoring.grafana.port}")
+    private int grafanaPort;
+
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
 
         String baseUrl = urlProvider.getApplicationBaseUrl();
+        String host = urlProvider.getDynamicHostAddress();
 
         log.info("- - - - - - - - - - - - - - - - - - - - - - - - ");
         log.info("Application '{}' started at {}/", appName, baseUrl);
         log.info("Swagger UI available at {}{}", baseUrl, swaggerPath);
+
+        // Log Monitoring Tools
+        log.info("- - - Start Docker Containers to be able to access the monitoring tools - - -");
+        log.info("Prometheus Dashboard: http://{}:{}", host, prometheusPort);
+        log.info("Grafana Dashboard: http://{}:{}", host, grafanaPort);
+
         log.info("Active profile(s): {}", String.join(", ", event.getApplicationContext().getEnvironment().getActiveProfiles()));
         log.info("- - - - - - - - - - - - - - - - - - - - - - - - ");
     }
