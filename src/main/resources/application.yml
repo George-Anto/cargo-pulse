@@ -4,7 +4,3 @@ spring:
 
   profiles:
     active: ${CARGOPULSE_PROFILE:dev}
-
-swagger:
-  enabled: true
-  path: /swagger-ui/index.html

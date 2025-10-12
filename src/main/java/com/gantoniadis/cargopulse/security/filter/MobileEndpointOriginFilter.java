@@ -33,6 +33,12 @@ public class MobileEndpointOriginFilter extends OncePerRequestFilter {
     @Value("${host.url.mobile-app}")
     private String mobileAppUrl;
 
+    @Value("${security.mobile-secret-header-key}")
+    private String mobileSecretHeaderKey;
+
+    @Value("${security.mobile-secret-header-value}")
+    private String mobileSecretHeaderValue;
+
     private static final String MOBILE_ENDPOINT_PATTERN = "/api/auth/";
     private static final String MOBILE_SUFFIX = "/mobile";
 
@@ -45,6 +51,7 @@ public class MobileEndpointOriginFilter extends OncePerRequestFilter {
         
         // Check if this is a mobile-specific endpoint
         if (isMobileEndpoint(requestPath)) {
+
             String origin = request.getHeader("Origin");
             String referer = request.getHeader("Referer");
             
@@ -53,26 +60,17 @@ public class MobileEndpointOriginFilter extends OncePerRequestFilter {
             
             // Block access if origin is not from mobile app
             if (!isValidMobileOrigin(origin)) {
-                log.warn("Blocked access to mobile endpoint {} from unauthorized origin: {} (referer: {})", 
+                log.warn("Blocked access to mobile endpoint {} from unauthorized origin: {} (referer: {})",
                         requestPath, origin, referer);
 
-                HttpStatus status = HttpStatus.FORBIDDEN;
+                sendErrorResponse(response, requestPath, "This endpoint is only accessible from the mobile application.");
+                return;
+            }
 
-                // 2. Build the ErrorResponse object to match the GlobalExceptionHandler format
-                ErrorResponse errorResponse = new ErrorResponse(
-                        LocalDateTime.now(),
-                        status.value(),
-                        status.getReasonPhrase(),
-                        "This endpoint is only accessible from the mobile application",
-                        request.getRequestURI()
-                );
-
-                // 3. Set the response headers and status
-                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-
-                // 4. Write the JSON response body
-                response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+            // If the custom header does not include the secret key, block access
+            if (!mobileSecretHeaderValue.equals(request.getHeader(mobileSecretHeaderKey))) {
+                log.warn("Blocked access to mobile endpoint {} due to missing/invalid custom secret header.", requestPath);
+                sendErrorResponse(response, requestPath, "Missing or invalid mobile client secret.");
                 return;
             }
         }
@@ -93,23 +91,38 @@ public class MobileEndpointOriginFilter extends OncePerRequestFilter {
      * Validate if the origin is from the authorized mobile app
      */
     private boolean isValidMobileOrigin(String origin) {
-        // For mobile apps, the origin might be null or the mobile app URL
-        // Mobile apps typically don't send Origin header, or send the app scheme
-        
-        // If origin is null (typical for mobile apps), allow it
+        // If a request has a standard HTTP/HTTPS origin, it must be the whitelisted mobile URL
+        if (origin != null && (origin.startsWith("http://") || origin.startsWith("https://"))) {
+            // We only allow if it exactly matches the mobile app URL
+            return mobileAppUrl.equals(origin);
+        }
+
+        // If the request has no Origin header (null/empty), we assume it's the mobile app.
+        // This is the WEAKEST point, but sometimes necessary for native mobile apps.
         if (origin == null || origin.isEmpty()) {
             return true;
         }
-        
-        // If origin matches the configured mobile app URL, allow it
-        if (mobileAppUrl.equals(origin)) {
-            return true;
-        }
-        
-        // Block if origin is from web browsers (http/https schemes from different domains)
-        // This is likely a web browser request, block it
-        return !origin.startsWith("http://") && !origin.startsWith("https://");
-        
-        // For custom app schemes (like app://), allow them
+
+        // We allow custom non-web schemes only if they match the mobile app's scheme
+        return mobileAppUrl.startsWith(origin);
+    }
+
+    private void sendErrorResponse(HttpServletResponse response, String requestPath, String message) throws IOException {
+        HttpStatus status = HttpStatus.FORBIDDEN;
+
+        ErrorResponse errorResponse = new ErrorResponse(
+                LocalDateTime.now(),
+                status.value(),
+                status.getReasonPhrase(),
+                message,
+                requestPath
+        );
+
+        // Set the response headers and status
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+
+        // Write the JSON response body
+        response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
     }
 }

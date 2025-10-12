@@ -67,18 +67,18 @@ public class AuthController {
     }
 
     /**
-     * Handles token refresh for **Mobile** clients. RT is read from the custom X-Refresh-Token header.
+     * Handles token refresh for **Mobile** clients. RT is read from the custom CP-Refresh-Token header.
      */
     @PostMapping("/refresh/mobile")
     public ResponseEntity<AuthenticationResponseDTO> refreshMobile(
             @RequestHeader("Authorization") String authHeader,
-            @RequestHeader("X-Refresh-Token") String refreshToken // RT read from custom header
+            @RequestHeader("CP-Refresh-Token") String refreshToken // RT read from custom header
     ) {
         String oldAccessToken = extractAccessToken(authHeader);
 
         if (refreshToken == null || refreshToken.isEmpty()) {
             // Throw exception if RT is missing; handled by GlobalExceptionHandler
-            throw new CustomAuthenticationException("Refresh token missing from X-Refresh-Token header.");
+            throw new CustomAuthenticationException("Refresh token missing from CP-Refresh-Token header.");
         }
         // Service performs rotation and returns new AT/RT in the response body
         return ResponseEntity.ok(authService.refreshMobile(oldAccessToken, refreshToken));

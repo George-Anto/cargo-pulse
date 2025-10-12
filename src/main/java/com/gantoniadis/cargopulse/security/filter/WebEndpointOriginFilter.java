@@ -2,6 +2,8 @@ package com.gantoniadis.cargopulse.security.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gantoniadis.cargopulse.exception.ErrorResponse;
+import com.gantoniadis.cargopulse.service.ApplicationUrlProvider;
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,11 +32,23 @@ public class WebEndpointOriginFilter extends OncePerRequestFilter {
 
     private final ObjectMapper objectMapper;
 
+    private final ApplicationUrlProvider appUrlProvider;
+
     @Value("${host.url.frontend}")
     private String frontendUrl;
 
     private static final String WEB_ENDPOINT_PATTERN = "/api/auth/";
     private static final String WEB_SUFFIX = "/web";
+
+    private String appSelfUrl;
+    private boolean areSwaggerRequestsEnabled;
+
+    @PostConstruct
+    private void init() {
+        appSelfUrl = appUrlProvider.getApplicationBaseUrl();
+
+        areSwaggerRequestsEnabled = appUrlProvider.getEnvironment().getProperty("swagger.requests.enabled", Boolean.class, false);
+    }
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -93,21 +107,13 @@ public class WebEndpointOriginFilter extends OncePerRequestFilter {
      * Validate if the origin is from an authorized web browser
      */
     private boolean isValidWebOrigin(String origin) {
-        // Web endpoints should only be accessible from web browsers
-        
-        // If origin is null (typical for mobile apps or direct API calls), block it
+        // must have an origin to be a valid web request
         if (origin == null || origin.isEmpty()) {
             return false;
         }
-        
-        // If origin matches the configured web apps URL, allow it
-        if (frontendUrl.equals(origin)) {
-            return true;
-        }
-        
-        // Allow if origin is from web browsers (http/https schemes)
-        return origin.startsWith("http://") || origin.startsWith("https://");
-        
-        // Block custom app schemes (like app://) - these are likely mobile apps
+
+        // Only allow if the origin exactly matches a whitelisted web URL
+        // or is from within this app (swagger) - only when enabled
+        return frontendUrl.equals(origin) || (appSelfUrl.equals(origin) && areSwaggerRequestsEnabled);
     }
 }

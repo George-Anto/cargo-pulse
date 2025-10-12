@@ -16,14 +16,19 @@ import java.util.Collections;
 @Component
 public class RequestLoggingFilter extends OncePerRequestFilter {
 
+    private static final String SWAGGER_PATH_PART = "swagger";
+    private static final String PROMETHEUS_ENDPOINT = "/actuator/prometheus";
+
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain filterChain)
             throws ServletException, IOException {
 
-        // For the swagger requests, just log their details only in debug level
-        if (request.getRequestURI().toLowerCase().contains("swagger")) {
+        final String requestURI = request.getRequestURI();
+
+        // For the swagger and prometheus requests, just log their details only in debug level
+        if (requestURI.toLowerCase().contains(SWAGGER_PATH_PART) || requestURI.toLowerCase().contains(PROMETHEUS_ENDPOINT)) {
 
             log.debug("Incoming request: method={}, uri={}, from={}",
                     request.getMethod(),

@@ -40,7 +40,9 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final MobileEndpointOriginFilter mobileEndpointOriginFilter;
     private final WebEndpointOriginFilter webEndpointOriginFilter;
+
     private final AuthenticationEntryPoint unauthorizedHandler;
+
     private final UserDetailsService userDetailsService;
 
     @Value("${host.url.frontend}")
@@ -127,7 +129,7 @@ public class SecurityConfig {
 
         // Allowed Headers
         configuration.setAllowedHeaders(List.of(
-                HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, HttpHeaders.ACCEPT, "X-Refresh-Token"
+                HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, HttpHeaders.ACCEPT, "CP-Refresh-Token"
         ));
 
         // Exposed Headers

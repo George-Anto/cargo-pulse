@@ -1,5 +1,6 @@
 package com.gantoniadis.cargopulse.config;
 
+import com.gantoniadis.cargopulse.service.ApplicationUrlProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,6 +13,8 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class StartupLogger implements ApplicationListener<ApplicationReadyEvent> {
 
+    private final ApplicationUrlProvider urlProvider;
+
     @Value("${spring.application.name}")
     private String appName;
 
@@ -20,22 +23,13 @@ public class StartupLogger implements ApplicationListener<ApplicationReadyEvent>
 
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
-        String host = getDynamicHost();
-        int port = event.getApplicationContext().getEnvironment().getProperty("server.port", Integer.class, 8080);
+
+        String baseUrl = urlProvider.getApplicationBaseUrl();
 
         log.info("- - - - - - - - - - - - - - - - - - - - - - - - ");
-        log.info("Application '{}' started at http://{}:{}/", appName, host, port);
-        log.info("Swagger UI available at http://{}:{}{}", host, port, swaggerPath);
+        log.info("Application '{}' started at {}/", appName, baseUrl);
+        log.info("Swagger UI available at {}{}", baseUrl, swaggerPath);
         log.info("Active profile(s): {}", String.join(", ", event.getApplicationContext().getEnvironment().getActiveProfiles()));
         log.info("- - - - - - - - - - - - - - - - - - - - - - - - ");
-    }
-
-    private String getDynamicHost() {
-        try {
-            return java.net.InetAddress.getLocalHost().getHostAddress();
-        } catch (Exception e) {
-            log.warn("Failed to determine host address, defaulting to 'localhost'", e);
-            return "localhost";
-        }
     }
 }

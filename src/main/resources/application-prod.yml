@@ -53,7 +53,14 @@ host:
     mobile-app: ${CARGOPULSE_MOBILE_APP_URL:app://cargopulse.mobile}
 
 security:
+  mobile-secret-header-key: ${CARGOPULSE_MOBILE_SECURITY_KEY_HEADER:${mobile.prod.secret.header.key}}
+  mobile-secret-header-value: ${CARGOPULSE_MOBILE_SECURITY_KEY_VALUE:${mobile.prod.secret.header.value}}
   cookie:
     transfer: true
   prometheus:
-    ip-expression: ${CARGO_PULSE_PROMETHEUS_IP:hasIpAddress('127.0.0.1')}
+    ip-expression: ${CARGOPULSE_PROMETHEUS_IP:hasIpAddress('127.0.0.1')}
+
+swagger:
+  path: /swagger-ui/index.html
+  requests:
+    enabled: false # Must be 'true' or 'false'
