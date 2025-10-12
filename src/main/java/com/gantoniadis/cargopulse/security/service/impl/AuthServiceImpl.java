@@ -26,6 +26,18 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Date;
 
+/**
+ * Service handling core authentication, token generation, and Refresh Token Rotation (RTR) logic.
+ * * NOTE ON SECURITY (Token Replay Defense):
+ * ---------------------------------------
+ * In the rotateRefreshToken() method, if a blocklisted (old) Access Token is detected,
+ * the service immediately revokes the associated valid Refresh Token (RT) from Redis.
+ * This terminates the session's renewal capability, defending against token replay attacks.
+ * * The short-lived Access Token (AT) that the legitimate client currently holds remains valid
+ * until its natural expiration (e.g., 15 minutes). This is an accepted risk trade-off in
+ * stateless JWT systems, as forcing full AT revocation is complex and costly. The primary
+ * defense is the *immediate revocation of the long-lived RT*.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -182,59 +194,87 @@ public class AuthServiceImpl implements AuthService {
     }
 
     // Core logic for Refresh Token Rotation (RTR).
-    private AuthenticationResponseDTO rotateRefreshToken(String oldAccessToken, String oldRefreshToken) throws CustomAuthenticationException {
+    private AuthenticationResponseDTO rotateRefreshToken(String oldAccessToken, String oldRefreshToken)
+            throws CustomAuthenticationException {
 
-        // Blocklist the Old Access Token
+        // 1. Check for Token Replay (Blocklist Check)
+        if (blocklistService.isTokenBlocklisted(oldAccessToken)) {
+
+            try {
+                UserAccountDTO userDTO = getUserFromRefreshToken(oldRefreshToken);
+
+                // Revoke all tokens for the user and force re-login (Replay defense)
+                String userId = userDTO.getId().toString();
+                refreshTokenService.deleteRefreshToken(userId);
+                log.warn("Security failure: Blocklisted AT used in refresh request. Revoking RT token for user: {}", userDTO.getUsername());
+            } catch (CustomAuthenticationException ex) {
+                log.warn("Security failure: Blocklisted AT used, but RT was invalid/expired or user not found. Exception: {}", ex.getMessage());
+            }
+
+            throw new CustomAuthenticationException("Invalid or previously used access token detected for rotation.");
+        }
+
+        // 2. Blocklist the Old Access Token
         try {
             Date expiration = jwtService.extractExpiration(oldAccessToken);
             long remainingMillis = expiration.getTime() - System.currentTimeMillis();
 
-            // Blocklist only if there is remaining time
             if (remainingMillis > 0) {
                 blocklistService.blockToken(oldAccessToken, Duration.ofMillis(remainingMillis));
                 log.info("Blocklisted old AT for immediate invalidation.");
             }
         }  catch (Exception ex) {
-            // If the old AT is invalid, we stop the rotation.
             log.warn("Security failure: Cannot process or blocklist old Access Token.", ex);
             throw new CustomAuthenticationException("Invalid access token provided for rotation.");
         }
 
-        // Basic validation
-        if (jwtService.isTokenExpired(oldRefreshToken)) {
-            throw new CustomAuthenticationException("Refresh token is expired.");
-        }
-
-        String username = jwtService.extractUsername(oldRefreshToken);
-        var user = userAccountRepository.findByUsername(username).orElseThrow(
-                () -> new CustomAuthenticationException("User not found for refresh token.")
-        );
-        var userDTO = userAccountMapper.userToUserDTO(user);
+        // 3. Centralized validation and user retrieval
+        UserAccountDTO userDTO = getUserFromRefreshToken(oldRefreshToken);
         String userId = userDTO.getId().toString();
 
-        // Validate against Redis. If stolen/replayed, delete valid token.
+        // 4. Validate against Redis. If stolen/replayed, delete valid token.
         if (!refreshTokenService.isValidForUser(userId, oldRefreshToken)) {
-            // Revoke ALL tokens for the user
+            // Revoke all tokens for the user
             refreshTokenService.deleteRefreshToken(userId);
             throw new CustomAuthenticationException("Invalid or revoked refresh token used.");
         }
 
-        // Generate NEW Tokens
+        // 5. Generate new Tokens
         var newAccessToken = jwtService.generateToken(Collections.singletonMap("roles",
                 userDTO.getRoles()), userDTO);
         var newRefreshToken = jwtService.generateRefreshToken(userDTO);
 
-        // Update Redis: Blocklist old token and store new one (RTR)
+        // 6. Update Redis: Blocklist old token and store new one (RTR)
         refreshTokenService.deleteRefreshToken(userId);
         refreshTokenService.storeRefreshToken(userId, newRefreshToken);
 
-        // Return new tokens
+        // 7. Return new tokens
         return AuthenticationResponseDTO.builder()
                 .jwt(newAccessToken)
                 .refreshToken(newRefreshToken)
                 .username(userDTO.getUsername())
                 .roles(userDTO.getRoles())
                 .build();
+    }
+
+    /**
+     * Extracts username from the Refresh Token, finds the corresponding User,
+     * and handles exceptions.
+     * @param refreshToken The token to process.
+     * @return The DTO of the authenticated user.
+     * @throws CustomAuthenticationException if the token is expired or the user is not found.
+     */
+    private UserAccountDTO getUserFromRefreshToken(String refreshToken) throws CustomAuthenticationException {
+        if (jwtService.isTokenExpired(refreshToken)) {
+            throw new CustomAuthenticationException("Refresh token is expired.");
+        }
+
+        String username = jwtService.extractUsername(refreshToken);
+        var user = userAccountRepository.findByUsername(username).orElseThrow(
+                () -> new CustomAuthenticationException("User not found for refresh token.")
+        );
+
+        return userAccountMapper.userToUserDTO(user);
     }
 
     // Helper method to create and attach the secure HttpOnly cookie.
@@ -254,7 +294,7 @@ public class AuthServiceImpl implements AuthService {
     private void expireRefreshCookie(HttpServletResponse response) {
         ResponseCookie expiredCookie = ResponseCookie.from("refreshToken", "")
                 .httpOnly(true)
-                .secure(true)
+                .secure(isSecureCookieTransferEnabled)
                 .path("/api/auth")
                 .maxAge(0) // Expires immediately
                 .sameSite("Strict")
