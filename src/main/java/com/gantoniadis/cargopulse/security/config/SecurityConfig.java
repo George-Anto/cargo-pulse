@@ -50,6 +50,9 @@ public class SecurityConfig {
     @Value("${host.url.mobile-app}")
     private String mobileAppUrl;
 
+    @Value("${security.mobile-secret-header-key}")
+    private String mobileSecretHeader;
+
     @Value("${monitoring.prometheus.ip-expression}")
     private String prometheusIpExpression;
     private static final String[] SWAGGER_WHITELIST = {
@@ -129,7 +132,11 @@ public class SecurityConfig {
 
         // Allowed Headers
         configuration.setAllowedHeaders(List.of(
-                HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, HttpHeaders.ACCEPT, "CP-Refresh-Token"
+                HttpHeaders.AUTHORIZATION,
+                HttpHeaders.CONTENT_TYPE,
+                HttpHeaders.ACCEPT,
+                mobileSecretHeader,
+                "CP-Refresh-Token"
         ));
 
         // Exposed Headers

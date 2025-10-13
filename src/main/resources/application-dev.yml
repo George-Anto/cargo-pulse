@@ -1,5 +1,25 @@
 server:
-  port: ${CARGOPULSE_SERVER_PORT:8080}
+  port: ${CARGOPULSE_SERVER_PORT:8443}
+  ssl:
+    # --------------------------------------------------------------------------------------
+    # Self-Signed Certificate Generation
+    # --------------------------------------------------------------------------------------
+    # The certificate file below was generated using the Java keytool utility:
+    # keytool -genkeypair -alias cargopulse -keyalg RSA -keysize 2048 -storetype PKCS12 -keystore certificates/keystore.p12 -validity 3650
+    # --------------------------------------------------------------------------------------
+    # Current value: classpath:certificates/keystore.p12
+    key-store: ${ssl.dev.key-store}
+    # Current value: PKCS12
+    key-store-type: ${ssl.dev.key-store-type}
+    # Password for the keystore container (is required to open the keystore.p12 file)
+    # Current value: mysecret
+    key-store-password: ${CARGOPULSE_KEYSTORE_PASSWORD:${ssl.dev.key-store-password}}
+    # Current value: cargopulse
+    key-alias: ${ssl.dev.key-alias}
+    # This password is required to access the actual certificate and private key,
+    # allowing the server to decrypt traffic.
+    # Current value: mysecret
+    key-password: ${CARGOPULSE_KEY_PASSWORD:${ssl.dev.key-password}}
 
 spring:
   datasource:
@@ -16,7 +36,8 @@ spring:
   data:
     redis:
       host: ${CARGOPULSE_REDIS_HOST_URL:${redis.dev.host}}
-      port: ${CARGOPULSE_REDIS_PORT:${redis.dev.port}}
+      # Use port 6379 with local container set up
+      port: ${CARGOPULSE_REDIS_PORT:6380}
       password: ${CARGOPULSE_REDIS_PASSWORD:${redis.dev.secret}}
       ssl:
         enabled: true # Disable ssl for local redis

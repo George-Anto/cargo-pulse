@@ -16,7 +16,7 @@ spring:
   data:
     redis:
       host: ${CARGOPULSE_REDIS_HOST_URL:${redis.prod.host}}
-      port: ${CARGOPULSE_REDIS_PORT:${redis.prod.port}}
+      port: ${CARGOPULSE_REDIS_PORT:6380}
       password: ${CARGOPULSE_REDIS_PASSWORD:${redis.prod.secret}}
       ssl:
         enabled: true

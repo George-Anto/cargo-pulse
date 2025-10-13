@@ -34,7 +34,7 @@ public class MobileEndpointOriginFilter extends OncePerRequestFilter {
     private String mobileAppUrl;
 
     @Value("${security.mobile-secret-header-key}")
-    private String mobileSecretHeaderKey;
+    private String mobileSecretHeader;
 
     @Value("${security.mobile-secret-header-value}")
     private String mobileSecretHeaderValue;
@@ -68,7 +68,7 @@ public class MobileEndpointOriginFilter extends OncePerRequestFilter {
             }
 
             // If the custom header does not include the secret key, block access
-            if (!mobileSecretHeaderValue.equals(request.getHeader(mobileSecretHeaderKey))) {
+            if (!mobileSecretHeaderValue.equals(request.getHeader(mobileSecretHeader))) {
                 log.warn("Blocked access to mobile endpoint {} due to missing/invalid custom secret header.", requestPath);
                 sendErrorResponse(response, requestPath, "Missing or invalid mobile client secret.");
                 return;
