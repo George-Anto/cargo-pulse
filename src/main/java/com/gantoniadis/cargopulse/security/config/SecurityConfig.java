@@ -5,8 +5,10 @@ import com.gantoniadis.cargopulse.security.filter.MobileEndpointOriginFilter;
 import com.gantoniadis.cargopulse.security.filter.WebEndpointOriginFilter;
 import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
+import com.gantoniadis.cargopulse.config.properties.HostUrlProperties;
+import com.gantoniadis.cargopulse.config.properties.SecurityProperties;
+import com.gantoniadis.cargopulse.config.properties.MonitoringProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -45,16 +47,9 @@ public class SecurityConfig {
 
     private final UserDetailsService userDetailsService;
 
-    @Value("${host.url.frontend}")
-    private String frontendUrl;
-    @Value("${host.url.mobile-app}")
-    private String mobileAppUrl;
-
-    @Value("${security.mobile-secret-header-key}")
-    private String mobileSecretHeader;
-
-    @Value("${monitoring.prometheus.ip-expression}")
-    private String prometheusIpExpression;
+    private final HostUrlProperties hostUrlProperties;
+    private final SecurityProperties securityProperties;
+    private final MonitoringProperties monitoringProperties;
     private static final String[] SWAGGER_WHITELIST = {
             "/swagger-ui/**",
             "/swagger-ui.html",
@@ -83,7 +78,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, ALL_PATHS).permitAll()
                         .requestMatchers(SWAGGER_WHITELIST).permitAll()
                         .requestMatchers(ACTUATOR_PROMETHEUS).access(
-                                new WebExpressionAuthorizationManager(prometheusIpExpression)
+                                new WebExpressionAuthorizationManager(monitoringProperties.getPrometheus().getIpExpression())
                         )
                         .anyRequest().authenticated()
                 )
@@ -117,8 +112,8 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
 
         final List<String> allowedOriginsList = List.of(
-                frontendUrl,
-                mobileAppUrl
+                hostUrlProperties.getFrontend(),
+                hostUrlProperties.getMobileApp()
         );
 
         configuration.setAllowedOrigins(allowedOriginsList);
@@ -135,7 +130,7 @@ public class SecurityConfig {
                 HttpHeaders.AUTHORIZATION,
                 HttpHeaders.CONTENT_TYPE,
                 HttpHeaders.ACCEPT,
-                mobileSecretHeader,
+                securityProperties.getMobileSecretHeaderKey(),
                 "CP-Refresh-Token"
         ));
 

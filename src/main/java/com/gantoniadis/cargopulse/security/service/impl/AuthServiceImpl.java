@@ -13,8 +13,8 @@ import com.gantoniadis.cargopulse.user.repository.UserAccountRepository;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import com.gantoniadis.cargopulse.config.properties.SecurityProperties;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -53,8 +53,7 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserAccountRepository userAccountRepository;
 
-    @Value("${security.cookie.transfer}")
-    private boolean isSecureCookieTransferEnabled;
+    private final SecurityProperties securityProperties;
 
     // Core authentication logic: authenticates user, generates AT and RT, stores RT in Redis.
     public AuthenticationResponseDTO authenticate(AuthenticationRequestDTO request) throws CustomAuthenticationException {
@@ -282,7 +281,7 @@ public class AuthServiceImpl implements AuthService {
         long refreshExpirationSec = jwtService.getRefreshExpiration() / 1000;
         ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
                 .httpOnly(true) // Prevents client-side JS access (XSS defense)
-                .secure(isSecureCookieTransferEnabled) // Must use HTTPS in prod
+                .secure(securityProperties.getCookie().isSslTransfer()) // Must use HTTPS in prod
                 .path("/api/auth") // Only sent to /api/auth endpoints (e.g., /refresh/web)
                 .maxAge(refreshExpirationSec)
                 .sameSite("Strict") // CSRF defense
@@ -294,7 +293,7 @@ public class AuthServiceImpl implements AuthService {
     private void expireRefreshCookie(HttpServletResponse response) {
         ResponseCookie expiredCookie = ResponseCookie.from("refreshToken", "")
                 .httpOnly(true)
-                .secure(isSecureCookieTransferEnabled)
+                .secure(securityProperties.getCookie().isSslTransfer())
                 .path("/api/auth")
                 .maxAge(0) // Expires immediately
                 .sameSite("Strict")

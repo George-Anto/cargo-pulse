@@ -8,8 +8,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import com.gantoniadis.cargopulse.config.properties.HostUrlProperties;
+import com.gantoniadis.cargopulse.config.properties.SecurityProperties;
 import org.springframework.http.MediaType;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
@@ -29,15 +30,8 @@ import java.time.LocalDateTime;
 public class MobileEndpointOriginFilter extends OncePerRequestFilter {
 
     private final ObjectMapper objectMapper;
-
-    @Value("${host.url.mobile-app}")
-    private String mobileAppUrl;
-
-    @Value("${security.mobile-secret-header-key}")
-    private String mobileSecretHeader;
-
-    @Value("${security.mobile-secret-header-value}")
-    private String mobileSecretHeaderValue;
+    private final HostUrlProperties hostUrlProperties;
+    private final SecurityProperties securityProperties;
 
     private static final String MOBILE_ENDPOINT_PATTERN = "/api/auth/";
     private static final String MOBILE_SUFFIX = "/mobile";
@@ -48,16 +42,16 @@ public class MobileEndpointOriginFilter extends OncePerRequestFilter {
                                     @NonNull FilterChain filterChain) throws ServletException, IOException {
 
         String requestPath = request.getRequestURI();
-        
+
         // Check if this is a mobile-specific endpoint
         if (isMobileEndpoint(requestPath)) {
 
             String origin = request.getHeader("Origin");
             String referer = request.getHeader("Referer");
-            
+
             log.debug("Mobile endpoint access attempt - Path: {}, Origin: {}, Referer: {}", 
                      requestPath, origin, referer);
-            
+
             // Block access if origin is not from mobile app
             if (!isValidMobileOrigin(origin)) {
                 log.warn("Blocked access to mobile endpoint {} from unauthorized origin: {} (referer: {})",
@@ -68,7 +62,7 @@ public class MobileEndpointOriginFilter extends OncePerRequestFilter {
             }
 
             // If the custom header does not include the secret key, block access
-            if (!mobileSecretHeaderValue.equals(request.getHeader(mobileSecretHeader))) {
+            if (!securityProperties.getMobileSecretHeaderValue().equals(request.getHeader(securityProperties.getMobileSecretHeaderKey()))) {
                 log.warn("Blocked access to mobile endpoint {} due to missing/invalid custom secret header.", requestPath);
                 sendErrorResponse(response, requestPath, "Missing or invalid mobile client secret.");
                 return;
@@ -94,7 +88,7 @@ public class MobileEndpointOriginFilter extends OncePerRequestFilter {
         // If a request has a standard HTTP/HTTPS origin, it must be the whitelisted mobile URL
         if (origin != null && (origin.startsWith("http://") || origin.startsWith("https://"))) {
             // We only allow if it exactly matches the mobile app URL
-            return mobileAppUrl.equals(origin);
+            return hostUrlProperties.getMobileApp().equals(origin);
         }
 
         // If the request has no Origin header (null/empty), we assume it's the mobile app.
@@ -104,7 +98,7 @@ public class MobileEndpointOriginFilter extends OncePerRequestFilter {
         }
 
         // We allow custom non-web schemes only if they match the mobile app's scheme
-        return mobileAppUrl.startsWith(origin);
+        return hostUrlProperties.getMobileApp().startsWith(origin);
     }
 
     private void sendErrorResponse(HttpServletResponse response, String requestPath, String message) throws IOException {

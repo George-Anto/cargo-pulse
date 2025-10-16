@@ -10,8 +10,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import com.gantoniadis.cargopulse.config.properties.HostUrlProperties;
 import org.springframework.http.MediaType;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
@@ -33,9 +33,7 @@ public class WebEndpointOriginFilter extends OncePerRequestFilter {
     private final ObjectMapper objectMapper;
 
     private final ApplicationUrlProvider appUrlProvider;
-
-    @Value("${host.url.frontend}")
-    private String frontendUrl;
+    private final HostUrlProperties hostUrlProperties;
 
     private static final String WEB_ENDPOINT_PATTERN = "/api/auth/";
     private static final String WEB_SUFFIX = "/web";
@@ -56,15 +54,15 @@ public class WebEndpointOriginFilter extends OncePerRequestFilter {
                                     @NonNull FilterChain filterChain) throws ServletException, IOException {
 
         String requestPath = request.getRequestURI();
-        
+
         // Check if this is a web-specific endpoint
         if (isWebEndpoint(requestPath)) {
             String origin = request.getHeader("Origin");
             String referer = request.getHeader("Referer");
-            
+
             log.debug("Web endpoint access attempt - Path: {}, Origin: {}, Referer: {}", 
                      requestPath, origin, referer);
-            
+
             // Block access if origin is not from a web browser
             if (!isValidWebOrigin(origin)) {
                 log.warn("Blocked access to web endpoint {} from unauthorized origin: {} (referer: {})", 
@@ -114,6 +112,7 @@ public class WebEndpointOriginFilter extends OncePerRequestFilter {
 
         // Only allow if the origin exactly matches a whitelisted web URL
         // or is from within this app (swagger) - only when enabled
-        return frontendUrl.equals(origin) || (appSelfUrl.equals(origin) && areSwaggerRequestsEnabled);
+        return hostUrlProperties.getFrontend().equals(origin)
+                || (appSelfUrl.equals(origin) && areSwaggerRequestsEnabled);
     }
 }

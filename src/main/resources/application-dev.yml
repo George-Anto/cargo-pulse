@@ -77,7 +77,7 @@ security:
   mobile-secret-header-key: ${CARGOPULSE_MOBILE_SECURITY_KEY_HEADER:${mobile.dev.secret.header.key}}
   mobile-secret-header-value: ${CARGOPULSE_MOBILE_SECURITY_KEY_VALUE:${mobile.dev.secret.header.value}}
   cookie:
-    transfer: false
+    ssl-transfer: false
 
 swagger:
   path: /swagger-ui/index.html

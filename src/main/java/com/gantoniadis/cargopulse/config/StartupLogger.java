@@ -3,8 +3,10 @@ package com.gantoniadis.cargopulse.config;
 import com.gantoniadis.cargopulse.service.ApplicationUrlProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import com.gantoniadis.cargopulse.config.properties.ApplicationProperties;
+import com.gantoniadis.cargopulse.config.properties.SwaggerProperties;
+import com.gantoniadis.cargopulse.config.properties.MonitoringProperties;
 import org.springframework.context.ApplicationListener;
 import org.springframework.stereotype.Component;
 
@@ -14,18 +16,9 @@ import org.springframework.stereotype.Component;
 public class StartupLogger implements ApplicationListener<ApplicationReadyEvent> {
 
     private final ApplicationUrlProvider urlProvider;
-
-    @Value("${spring.application.name}")
-    private String appName;
-
-    @Value("${swagger.path}")
-    private String swaggerPath;
-
-    @Value("${monitoring.prometheus.port}")
-    private int prometheusPort;
-
-    @Value("${monitoring.grafana.port}")
-    private int grafanaPort;
+    private final ApplicationProperties applicationProperties;
+    private final SwaggerProperties swaggerProperties;
+    private final MonitoringProperties monitoringProperties;
 
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
@@ -34,13 +27,13 @@ public class StartupLogger implements ApplicationListener<ApplicationReadyEvent>
         String host = urlProvider.getDynamicHostAddress();
 
         log.info("- - - - - - - - - - - - - - - - - - - - - - - - ");
-        log.info("Application '{}' started at {}/", appName, baseUrl);
-        log.info("Swagger UI available at {}{}", baseUrl, swaggerPath);
+        log.info("Application '{}' started at {}/", applicationProperties.getName(), baseUrl);
+        log.info("Swagger UI available at {}{}", baseUrl, swaggerProperties.getPath());
 
         // Log Monitoring Tools
         log.info("- - - Start Docker Containers to be able to access the monitoring tools - - -");
-        log.info("Prometheus Dashboard: http://{}:{}", host, prometheusPort);
-        log.info("Grafana Dashboard: http://{}:{}", host, grafanaPort);
+        log.info("Prometheus Dashboard: http://{}:{}", host, monitoringProperties.getPrometheus().getPort());
+        log.info("Grafana Dashboard: http://{}:{}", host, monitoringProperties.getGrafana().getPort());
 
         log.info("Active profile(s): {}", String.join(", ", event.getApplicationContext().getEnvironment().getActiveProfiles()));
         log.info("- - - - - - - - - - - - - - - - - - - - - - - - ");

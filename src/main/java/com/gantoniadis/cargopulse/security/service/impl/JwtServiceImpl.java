@@ -8,9 +8,9 @@ import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
+import com.gantoniadis.cargopulse.config.properties.JwtProperties;
 
 import java.security.Key;
 import java.util.Date;
@@ -21,15 +21,11 @@ import java.util.function.Function;
 @RequiredArgsConstructor
 public class JwtServiceImpl implements JwtService {
 
-    @Value("${jwt.secret}")
-    private String secretKey;
+    private final JwtProperties jwtProperties;
 
-    @Value("${jwt.expiration-ms}")
-    private long jwtExpiration;
-
-    @Getter
-    @Value("${jwt.refresh-expiration-ms}")
-    private long refreshExpiration;
+    public long getRefreshExpiration() {
+        return jwtProperties.getRefreshExpirationMs();
+    }
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
@@ -41,11 +37,11 @@ public class JwtServiceImpl implements JwtService {
     }
 
     public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
-        return buildToken(extraClaims, userDetails, jwtExpiration);
+        return buildToken(extraClaims, userDetails, jwtProperties.getExpirationMs());
     }
 
     public String generateRefreshToken(UserDetails userDetails) {
-        return buildToken(Map.of(), userDetails, refreshExpiration);
+        return buildToken(Map.of(), userDetails, jwtProperties.getRefreshExpirationMs());
     }
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
@@ -82,7 +78,7 @@ public class JwtServiceImpl implements JwtService {
     }
 
     private Key getSignInKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+        byte[] keyBytes = Decoders.BASE64.decode(jwtProperties.getSecret());
         return Keys.hmacShaKeyFor(keyBytes);
     }
 }
