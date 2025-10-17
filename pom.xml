@@ -59,6 +59,10 @@
 			<groupId>com.azure.spring</groupId>
 			<artifactId>spring-cloud-azure-starter-actuator</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.azure.spring</groupId>
+			<artifactId>spring-cloud-azure-starter-keyvault-secrets</artifactId>
+		</dependency>
 <!--		<dependency>-->
 <!--			<groupId>com.azure.spring</groupId>-->
 <!--			<artifactId>spring-cloud-azure-starter-jdbc-postgresql</artifactId>-->

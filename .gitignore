@@ -63,3 +63,4 @@ bin/
 *.pid
 
 secrets.properties
+key-vault-vars.txt

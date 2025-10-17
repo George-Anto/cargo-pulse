@@ -1,16 +1,15 @@
 package com.gantoniadis.cargopulse.security.service.impl;
 
+import com.gantoniadis.cargopulse.config.properties.JwtProperties;
 import com.gantoniadis.cargopulse.security.service.JwtService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
-import com.gantoniadis.cargopulse.config.properties.JwtProperties;
 
 import java.security.Key;
 import java.util.Date;

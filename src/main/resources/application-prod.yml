@@ -69,3 +69,7 @@ monitoring:
     port: ${CARGOPULSE_PROMETHEUS_PORT:9090}
   grafana:
     port: ${CARGOPULSE_GRAFANA_PORT:3000}
+
+azure:
+  keyvault:
+    uri: ${AZURE_KEY_VAULT_URI}

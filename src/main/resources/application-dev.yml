@@ -25,7 +25,7 @@ spring:
   datasource:
     url: ${CARGOPULSE_DB_URL:jdbc:postgresql://localhost:5432/cargopulse}
     username: ${CARGOPULSE_DB_USER:postgres}
-    password: ${CARGOPULSE_DB_PASSWORD:}
+    password: ${CARGOPULSE_DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -90,3 +90,7 @@ monitoring:
     port: ${CARGOPULSE_PROMETHEUS_PORT:9090}
   grafana:
     port: ${CARGOPULSE_GRAFANA_PORT:3000}
+
+azure:
+  keyvault:
+    uri: ${AZURE_KEY_VAULT_URI}
