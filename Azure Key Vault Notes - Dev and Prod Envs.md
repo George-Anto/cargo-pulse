@@ -1,53 +1,54 @@
 # Azure Key Vault Dev and (Future) Prod Setup Process Notes
 
-This guide documents the steps taken to configure the Azure Key Vault and the Spring Boot application for securely loading database credentials in the local development profile.
+This guide documents the final, optimized configuration using the **`spring-cloud-azure-starter-keyvault`** for securely loading application secrets via the Spring Environment. This approach leverages Azure Identity and eliminates the need for manual order enforcement or custom secret-loading Java code.
+
+***
 
 ## 1. Azure Setup (Prerequisites)
 
-1.  **Key Vault Creation:**
-    * Provisioned an Azure Key Vault instance (e.g., `cargo-pulse-dev-kv`) to securely store application secrets.
-2.  **Service Principal Creation (App Registration):**
-    * Created an **Azure AD Application Registration** to serve as the Spring Boot app's identity (Service Principal).
-    * This process yielded the three required credentials:
-        * **Application (Client) ID** (`AZURE_CLIENT_ID`)
-        * **Directory (Tenant) ID** (`AZURE_TENANT_ID`)
-        * **Client Secret Value** (`AZURE_CLIENT_SECRET`)
-3.  **Access Control:**
-    * The Service Principal was granted **Key Vault Secrets User** role (or equivalent **Get/List** access policy permissions) on the Key Vault resource to allow it to read the stored secrets.
+1.  **Key Vault URI/Endpoint:** You must have a Key Vault provisioned. Its URI/Endpoint is supplied to the application via an environment variable.
+    * **Environment Variable:** `AZURE_KEYVAULT_ENDPOINT`
+2.  **Secret Naming:** Secrets in the Key Vault **MUST** be named to match the property placeholders in your `application.yml` (e.g., the secret named `cargo-pulse-db-url` is used as `${cargo-pulse-db-url}`).
+3.  **Access Control:** The application's identity (Service Principal for Dev/Local, Managed Identity for Prod/AKS) must be granted the **Key Vault Secrets User** role (or equivalent **Get/List** policy permissions) on the Key Vault resource.
 
 ***
 
-## 2. Spring Boot Integration (Local Authentication)
+## 2. Spring Boot Integration: Authentication Configuration
 
-The application uses the **Azure Identity SDK**'s **`DefaultAzureCredentialBuilder`** for authentication.
+The Spring Cloud Azure Starter uses the `DefaultAzureCredential` to handle authentication automatically, based on the environment variables provided.
 
-1.  **Credential Passing:** The Service Principal credentials are provided to the Spring Boot application via **Environment Variables** in the IntelliJ Run Configuration (or local shell).
-    * **Variables Used:** `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_CLIENT_SECRET`.
-2.  **Secret Retrieval:** The custom `AzureKeyVaultConfig` class performs the following:
-    * It uses the `SecretClient` to connect to the Key Vault.
-    * It retrieves the database secrets (e.g., `cargo-pulse-db-url`).
-    * It immediately sets these retrieved values as **Java System Properties** (e.g., `CARGOPULSE_DB_URL`, `CARGOPULSE_DB_USER`, `CARGOPULSE_DB_PASSWORD`) using `System.setProperty()`.
+### Dev/Local Environment (Service Principal Authentication)
+
+In the local development environment, authentication is driven by an Azure AD Service Principal, whose credentials are provided as environment variables.
+
+| Variable Name | Requirement | Configuration | Purpose |
+| :--- | :--- | :--- | :--- |
+| **`AZURE_KEYVAULT_ENDPOINT`** | **Required** | Environment Variable | Specifies the Key Vault URL. |
+| **`AZURE_CLIENT_ID`** | **Required** | Environment Variable | Service Principal (App Registration) ID for authentication. |
+| **`AZURE_TENANT_ID`** | **Required** | Environment Variable | Azure Directory/Tenant ID. |
+| **`AZURE_CLIENT_SECRET`** | **Required** | Environment Variable | Service Principal secret. |
 
 ***
 
-## 3. Order Enforcement (Solving the Timing Issue)
+### Production Environment (Managed Identity/Workload Identity Authentication)
 
-To prevent Spring Boot's automatic database connection from failing before the secrets are loaded:
+In the production environment (e.g., AKS/Workload Identity), the application authenticates using a Managed Identity, which requires no secret environment variables.
 
-1.  **Database Configuration Hook:** A configuration class (`DatabaseConfig.java` or similar) was created to manually define the `DataSource` bean (or the process that initializes it).
-2.  **Dependency:** The `@DependsOn("azureKeyVaultConfig")` annotation was applied to the `DataSource` bean definition. This **forces** Spring to fully initialize the `AzureKeyVaultConfig` (running the `@PostConstruct` method and setting the system properties) *before* attempting to build the database connection pool.
+| Variable Name | Requirement | Configuration | Purpose |
+| :--- | :--- | :--- | :--- |
+| **`AZURE_KEYVAULT_ENDPOINT`** | **Required** | Application Configuration | Specifies the Key Vault URL. |
+| **`AZURE_CLIENT_ID`** | **DO NOT PASS** | N/A | Authentication is handled by the **Managed Identity** assigned to the pod. |
+| **`AZURE_TENANT_ID`** | **DO NOT PASS** | N/A | |
+| **`AZURE_CLIENT_SECRET`** | **DO NOT PASS** | N/A | |
+
+* **Authentication Flow:** The `DefaultAzureCredential` automatically detects and uses the **Managed Identity** assigned to the host environment (like an AKS pod with Workload Identity) to authenticate to Key Vault.
+
 ***
 
-## 4. Production Environment (AKS & Managed Identity)
+## 3. Configuration Cleanup
 
-The current application code is designed for seamless transition to production using **Managed Identity** in Azure Kubernetes Service (AKS).
+The following components were successfully **removed** as they are no longer needed with the native Azure Property Source approach:
 
-1.  **No Code Change Required:** The use of **`DefaultAzureCredentialBuilder`** means the code automatically detects and prioritizes Managed Identity when deployed inside Azure.
-2.  **Authentication Flow in AKS:**
-    * When running in an AKS pod (configured with **Workload Identity**), the application **does not need** the `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, or `AZURE_CLIENT_SECRET` environment variables.
-    * The `DefaultAzureCredentialBuilder` senses the underlying Azure resource identity and uses it to authenticate to Key Vault.
-3.  **Deployment Steps:**
-    * Create a **User-Assigned Managed Identity**.
-    * Grant this **Managed Identity** the **Key Vault Secrets User** role (or equivalent) on the Key Vault.
-    * Configure the AKS deployment (via **Workload Identity**) to assign this Managed Identity to the application pod.
-    * **Crucially, ensure the Service Principal environment variables are NOT passed to the application container in AKS.**
+* Custom Java classes for secret loading (e.g., `AzureKeyVaultConfig.java`).
+* The `System.setProperty()` calls inside `@PostConstruct` methods.
+* All manual dependency enforcement annotations (`@DependsOn` on `DataSource` or `RedisConfig`).

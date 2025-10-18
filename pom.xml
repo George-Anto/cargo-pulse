@@ -61,7 +61,7 @@
 		</dependency>
 		<dependency>
 			<groupId>com.azure.spring</groupId>
-			<artifactId>spring-cloud-azure-starter-keyvault-secrets</artifactId>
+			<artifactId>spring-cloud-azure-starter-keyvault</artifactId>
 		</dependency>
 <!--		<dependency>-->
 <!--			<groupId>com.azure.spring</groupId>-->

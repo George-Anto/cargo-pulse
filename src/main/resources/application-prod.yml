@@ -2,10 +2,17 @@ server:
   port: ${CARGOPULSE_SERVER_PORT:8080}
 
 spring:
+  cloud:
+    azure:
+      keyvault:
+        secret:
+          property-sources[0]:
+            endpoint: ${AZURE_KEYVAULT_ENDPOINT}
+
   datasource:
-    url: ${CARGOPULSE_DB_URL:jdbc:postgresql://prod-db-host:5432/cargopulse}
-    username: ${CARGOPULSE_DB_USER:prod_user}
-    password: ${CARGOPULSE_DB_PASSWORD:prod_password}
+    url: ${cargo-pulse-db-url:jdbc:postgresql://prod-db-host:5432/cargopulse}
+    username: ${cargo-pulse-db-username:prod_user}
+    password: ${cargo-pulse-db-password:prod_password}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -15,9 +22,9 @@ spring:
 
   data:
     redis:
-      host: ${CARGOPULSE_REDIS_HOST_URL:${redis.prod.host}}
+      host: ${cargo-pulse-redis-host-azure:${redis.prod.host}}
       port: ${CARGOPULSE_REDIS_PORT:6380}
-      password: ${CARGOPULSE_REDIS_PASSWORD:${redis.prod.secret}}
+      password: ${cargo-pulse-redis-password-azure:${redis.prod.secret}}
       ssl:
         enabled: true
 
@@ -34,7 +41,7 @@ spring:
     change-log: classpath:db/changelog/changelog-master.xml
 
 jwt:
-  secret: ${CARGOPULSE_JWT_SECRET:${jwt.prod.secret}}
+  secret: ${cargo-pulse-jwt-secret:${jwt.prod.secret}}
   expiration-ms: 900_000 # 15 minutes
   refresh-expiration-ms: 604_800_000 # 7 days (7 * 24 * 60 * 60 * 1000)
 
@@ -49,12 +56,12 @@ management:
 
 host:
   url:
-    frontend: ${CARGOPULSE_FRONTEND_URL:https://cargo-pulse.com}
-    mobile-app: ${CARGOPULSE_MOBILE_APP_URL:app://cargopulse.mobile}
+    frontend: ${cargo-pulse-frontend-url:https://cargo-pulse.com}
+    mobile-app: ${cargo-pulse-mobile-app-url:app://cargopulse.mobile}
 
 security:
   mobile-secret-header-key: ${CARGOPULSE_MOBILE_SECURITY_KEY_HEADER:${mobile.prod.secret.header.key}}
-  mobile-secret-header-value: ${CARGOPULSE_MOBILE_SECURITY_KEY_VALUE:${mobile.prod.secret.header.value}}
+  mobile-secret-header-value: ${cargo-pulse-mobile-secret-value:${mobile.prod.secret.header.value}}
   cookie:
     ssl-transfer: true
 
@@ -69,7 +76,3 @@ monitoring:
     port: ${CARGOPULSE_PROMETHEUS_PORT:9090}
   grafana:
     port: ${CARGOPULSE_GRAFANA_PORT:3000}
-
-azure:
-  keyvault:
-    uri: ${AZURE_KEY_VAULT_URI}
