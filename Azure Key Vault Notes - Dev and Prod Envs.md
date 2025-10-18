@@ -45,7 +45,23 @@ In the production environment (e.g., AKS/Workload Identity), the application aut
 
 ***
 
-## 3. Configuration Cleanup
+## 3. Kubernetes Deployment (ConfigMap Strategy)
+
+Since the application fetches secrets directly from Key Vault, the Kubernetes **ConfigMap** should only contain bootstrap and non-sensitive configuration parameters. Secrets must be entirely omitted.
+
+| Variable | Status | K8s Object to Use | Reason |
+| :--- | :--- | :--- | :--- |
+| **`AZURE_KEYVAULT_ENDPOINT`** | **INCLUDE** | **ConfigMap/Env Var** | Mandatory bootstrap variable for Key Vault integration. |
+| **`CARGOPULSE_SERVER_PORT`** | **INCLUDE** | **ConfigMap/Env Var** | Non-sensitive runtime configuration. |
+| **`CARGOPULSE_PROMETHEUS_IP`** | **INCLUDE** | **ConfigMap/Env Var** | Non-sensitive monitoring configuration. |
+| **`CARGOPULSE_REDIS_PORT`** | **INCLUDE** | **ConfigMap/Env Var** | Non-sensitive connection information (Host/Password are secrets). |
+| **`cargo-pulse-db-url`** | **EXCLUDE** | N/A | **SECRET**—Fetched directly from Key Vault. |
+| **`cargo-pulse-jwt-secret`** | **EXCLUDE** | N/A | **SECRET**—Fetched directly from Key Vault. |
+| **`AZURE_CLIENT_ID/SECRET`** | **EXCLUDE** | N/A | **SECRET**—Only used locally. Do not deploy these values. |
+
+***
+
+## 4. Configuration Cleanup
 
 The following components were successfully **removed** as they are no longer needed with the native Azure Property Source approach:
 
