@@ -22,6 +22,10 @@ public class JwtServiceImpl implements JwtService {
 
     private final JwtProperties jwtProperties;
 
+    public long getExpiration() {
+        return jwtProperties.getExpirationMs();
+    }
+
     public long getRefreshExpiration() {
         return jwtProperties.getRefreshExpirationMs();
     }

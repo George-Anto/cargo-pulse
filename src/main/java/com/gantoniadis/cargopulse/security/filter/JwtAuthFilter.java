@@ -2,6 +2,7 @@ package com.gantoniadis.cargopulse.security.filter;
 
 import com.gantoniadis.cargopulse.security.service.JwtBlocklistService;
 import com.gantoniadis.cargopulse.security.service.JwtService;
+import com.gantoniadis.cargopulse.security.util.TokenExtractionHelper;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -46,17 +47,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         final String authHeader = request.getHeader(AUTHORIZATION_HEADER_KEY);
-        final String jwt;
+        final String jwtFromCookie = TokenExtractionHelper.extractAccessTokenFromCookie(request);
+        String jwt = null;
         String username;
 
-        // 2. If no header or bad prefix, let the chain continue unauthenticated
-        if (authHeader == null ||!authHeader.startsWith(BEARER)) {
+        // 2. Determine the JWT source (Cookie takes precedence for web, then Header for mobile)
+        if (jwtFromCookie != null) {
+            // Use AT from the HttpOnly cookie (Web flow)
+            jwt = jwtFromCookie;
+        } else if (authHeader != null && authHeader.startsWith(BEARER)) {
+            // Use AT from the Authorization header (Mobile flow)
+            jwt = authHeader.substring(BEARER.length());
+        }
+
+        // If no token is found, let the chain continue unauthenticated
+        if (jwt == null) {
             log.debug("No JWT found in request. Allowing chain to continue unauthenticated.");
             filterChain.doFilter(request, response);
             return;
         }
-
-        jwt = authHeader.substring(BEARER.length());
 
         // 3. Check for Blocklisted Token
         if (blocklistService.isTokenBlocklisted(jwt)) {

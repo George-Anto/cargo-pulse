@@ -1,11 +1,12 @@
 package com.gantoniadis.cargopulse.security.controller;
 
 import com.gantoniadis.cargopulse.security.dto.AuthenticationRequestDTO;
-import com.gantoniadis.cargopulse.security.dto.AuthenticationResponseDTO;
-import com.gantoniadis.cargopulse.security.dto.LogoutRequestDTO;
+import com.gantoniadis.cargopulse.security.dto.MobileAuthenticationResponseDTO;
+import com.gantoniadis.cargopulse.security.dto.MobileLogoutRequestDTO;
+import com.gantoniadis.cargopulse.security.dto.WebAuthenticationResponseDTO;
 import com.gantoniadis.cargopulse.security.exception.CustomAuthenticationException;
 import com.gantoniadis.cargopulse.security.service.AuthService;
-import jakarta.servlet.http.Cookie;
+import com.gantoniadis.cargopulse.security.util.TokenExtractionHelper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -26,55 +27,55 @@ public class AuthController {
     // --- LOGIN ENDPOINTS ---
 
     /**
-     * Handles login for **Mobile** clients. Returns both Access Token (AT) and Refresh Token (RT) in the body.
-     */
-    @PostMapping("/login/mobile")
-    public ResponseEntity<AuthenticationResponseDTO> authenticateMobile(@RequestBody AuthenticationRequestDTO request) {
-        // Auth service returns both tokens in the response body
-        return ResponseEntity.ok(authService.authenticateMobile(request));
-    }
-
-    /**
-     * Handles login for **Web** clients. Returns AT in the body. RT is set as a secure HttpOnly cookie by the service.
+     * Handles login for **Web** clients. AT and RT are set as a secure HttpOnly cookie by the service.
      */
     @PostMapping("/login/web")
-    public ResponseEntity<AuthenticationResponseDTO> authenticateWeb(
+    public ResponseEntity<WebAuthenticationResponseDTO> authenticateWeb(
             @RequestBody AuthenticationRequestDTO request,
             HttpServletResponse response // Passed to service to set HttpOnly cookie
     ) {
         return ResponseEntity.ok(authService.authenticateWeb(request, response));
     }
 
+    /**
+     * Handles login for **Mobile** clients. Returns both Access Token (AT) and Refresh Token (RT) in the body.
+     */
+    @PostMapping("/login/mobile")
+    public ResponseEntity<MobileAuthenticationResponseDTO> authenticateMobile(@RequestBody AuthenticationRequestDTO request) {
+        // Auth service returns both tokens in the response body
+        return ResponseEntity.ok(authService.authenticateMobile(request));
+    }
+
     // --- REFRESH ENDPOINTS (with Refresh Token Rotation) ---
 
     /**
-     * Handles token refresh for **Web** clients. RT is read from the HttpOnly cookie.
+     * Handles token refresh for **Web** clients. AT and RT are read from the HttpOnly cookie.
      */
     @PostMapping("/refresh/web")
-    public ResponseEntity<AuthenticationResponseDTO> refreshWeb(
-            @RequestHeader("Authorization") String authHeader,
-            HttpServletRequest request, HttpServletResponse response) {
-        // Extract RT from the incoming request cookie (sent automatically by the browser)
-        String refreshToken = extractRefreshTokenFromCookie(request);
-        String oldAccessToken = extractAccessToken(authHeader);
+    public ResponseEntity<WebAuthenticationResponseDTO> refreshWeb(HttpServletRequest request,
+                                                                      HttpServletResponse response) {
+        // Extract AT and RT from the incoming request cookies (sent automatically by the browser)
+        String refreshToken = TokenExtractionHelper.extractRefreshTokenFromCookie(request);
 
+        // Throw exception if RT is missing - handled by GlobalExceptionHandler
         if (refreshToken == null) {
-            // Throw exception if RT is missing; handled by GlobalExceptionHandler
             throw new CustomAuthenticationException("Refresh token missing from cookie.");
         }
+
         // Service performs rotation, blocks old RT, and sets NEW RT cookie on the response
-        return ResponseEntity.ok(authService.refreshWeb(oldAccessToken, refreshToken, response));
+        return ResponseEntity.ok(authService.refreshWeb(TokenExtractionHelper.extractAccessTokenFromCookie(request),
+                refreshToken, response));
     }
 
     /**
      * Handles token refresh for **Mobile** clients. RT is read from the custom CP-Refresh-Token header.
      */
     @PostMapping("/refresh/mobile")
-    public ResponseEntity<AuthenticationResponseDTO> refreshMobile(
+    public ResponseEntity<MobileAuthenticationResponseDTO> refreshMobile(
             @RequestHeader("Authorization") String authHeader,
             @RequestHeader("CP-Refresh-Token") String refreshToken // RT read from custom header
     ) {
-        String oldAccessToken = extractAccessToken(authHeader);
+        String oldAccessToken = TokenExtractionHelper.extractAccessTokenFromHeader(authHeader);
 
         if (refreshToken == null || refreshToken.isEmpty()) {
             // Throw exception if RT is missing; handled by GlobalExceptionHandler
@@ -84,56 +85,44 @@ public class AuthController {
         return ResponseEntity.ok(authService.refreshMobile(oldAccessToken, refreshToken));
     }
 
-    // --- LOGOUT ENDPOINT (Universal) ---
+    // --- LOGOUT ENDPOINTS ---
 
     /**
-     * Handles universal logout. Determines client type based on cookie presence and delegates.
+     * Handles logout for **Web** clients. AT and RT are read from HttpOnly cookies.
+     * The service logic handles potential null/expired cookies gracefully by skipping revocation.
      */
-    @PostMapping("/logout")
-    public ResponseEntity<Void> logout(
-            @RequestHeader("Authorization") String authHeader, // Access Token header for blocklisting
-            @RequestBody(required = false) LogoutRequestDTO requestBody, // Refresh Token body for mobile
-            HttpServletRequest request, // To check for cookie
-            HttpServletResponse response // To expire cookie
-    ) {
-        // Attempt to extract RT from the HttpOnly cookie (Web flow primary check)
-        String refreshTokenFromCookie = extractRefreshTokenFromCookie(request);
+    @PostMapping("/logout/web")
+    public ResponseEntity<Void> logoutWeb(HttpServletRequest request, HttpServletResponse response) {
 
-        if (refreshTokenFromCookie != null) {
-            // WEB Logout: Service revokes RT (from cookie) and handles cookie expiration
-            authService.logoutWeb(authHeader, refreshTokenFromCookie, response);
-        } else {
-            // MOBILE Logout: Use RT from request body (if provided) for revocation
-            String refreshTokenFromBody = (requestBody != null) ? requestBody.getRefreshToken() : null;
-            authService.logout(authHeader, refreshTokenFromBody);
-        }
+        // Pass tokens (which may be null if cookies expired) and response for cookie cleanup
+        authService.logoutWeb(TokenExtractionHelper.extractAccessTokenFromCookie(request),
+                TokenExtractionHelper.extractRefreshTokenFromCookie(request), response);
+
         return ResponseEntity.ok().build();
     }
 
-    // --- PRIVATE HELPER METHODS ---
-
     /**
-     * Utility to extract the "refreshToken" value from the incoming request cookies.
-     * This is used for web refresh/logout operations.
+     * Handles logout for **Mobile** clients. AT is read from Authorization header.
+     * RT is read from body.
      */
-    private String extractRefreshTokenFromCookie(HttpServletRequest request) {
-        if (request.getCookies() != null) {
-            for (Cookie cookie : request.getCookies()) {
-                if (cookie.getName().equals("refreshToken")) {
-                    return cookie.getValue();
-                }
-            }
-        }
-        return null;
-    }
+    @PostMapping("/logout/mobile")
+    public ResponseEntity<Void> logoutMobile(
+            @RequestHeader(name = "Authorization") String authHeader,
+            @RequestBody MobileLogoutRequestDTO requestBody) {
 
-    /**
-     * Extracts the raw JWT/Access Token string from the Authorization header (e.g., removes "Bearer ").
-     */
-    private String extractAccessToken(String authHeader) {
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            return authHeader.substring(7);
+        // Validate Authorization Header (AT)
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new CustomAuthenticationException("Authorization header must contain a 'Bearer' Access Token for mobile logout.");
         }
-        return null;
+        // RT is required for mobile logout to ensure session revocation
+        String refreshToken = requestBody.getRefreshToken();
+        if (refreshToken == null || refreshToken.isEmpty()) {
+            throw new CustomAuthenticationException("Refresh token is required in the body for mobile logout.");
+        }
+
+        // Pass the Authorization header (for AT blocklisting) and the RT
+        authService.logoutMobile(authHeader, refreshToken);
+
+        return ResponseEntity.ok().build();
     }
 }

@@ -26,13 +26,18 @@ public interface JwtService {
     <T> T extractClaim(String token, Function<Claims, T> claimsResolver);
 
     /**
-     * Generates a new JWT token for a given user with extra claims.
+     * Generates a new JWT token (Access Token) for a given user with extra claims.
      * @param extraClaims Map of additional claims to include in the token payload.
      * @param userDetails The UserDetails object representing the user.
-     * @return The generated JWT string.
+     * @return The generated JWT (Access Token) string.
      */
     String generateToken(Map<String, Object> extraClaims, UserDetails userDetails);
 
+    /**
+     * Generates a new, long-lived Refresh Token for a given user.
+     * @param userDetails The UserDetails object representing the user.
+     * @return The generated Refresh Token string.
+     */
     String generateRefreshToken(UserDetails userDetails);
 
     /**
@@ -43,6 +48,13 @@ public interface JwtService {
      */
     boolean isTokenValid(String token, UserDetails userDetails);
 
+    /**
+     * Checks if the given JWT token is expired.
+     * This method is often implemented to safely check the expiration without throwing an exception
+     * if the token is expired but valid in terms of signature.
+     * @param token The raw JWT string.
+     * @return True if the token is expired, false otherwise.
+     */
     boolean isTokenExpired(String token);
 
     /**
@@ -52,5 +64,15 @@ public interface JwtService {
      */
     Date extractExpiration(String token);
 
+    /**
+     * Retrieves the configured expiration time (in milliseconds) for the standard Access Token.
+     * @return The access token expiration time in milliseconds.
+     */
+    long getExpiration();
+
+    /**
+     * Retrieves the configured expiration time (in milliseconds) for the Refresh Token.
+     * @return The refresh token expiration time in milliseconds.
+     */
     long getRefreshExpiration();
 }

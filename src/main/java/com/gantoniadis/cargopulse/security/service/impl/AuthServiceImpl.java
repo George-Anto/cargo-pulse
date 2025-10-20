@@ -1,20 +1,23 @@
 package com.gantoniadis.cargopulse.security.service.impl;
 
+import com.gantoniadis.cargopulse.config.properties.SecurityProperties;
 import com.gantoniadis.cargopulse.security.dto.AuthenticationRequestDTO;
-import com.gantoniadis.cargopulse.security.dto.AuthenticationResponseDTO;
+import com.gantoniadis.cargopulse.security.dto.MobileAuthenticationResponseDTO;
+import com.gantoniadis.cargopulse.security.dto.WebAuthenticationResponseDTO;
 import com.gantoniadis.cargopulse.security.exception.CustomAuthenticationException;
 import com.gantoniadis.cargopulse.security.service.AuthService;
 import com.gantoniadis.cargopulse.security.service.JwtBlocklistService;
 import com.gantoniadis.cargopulse.security.service.JwtService;
 import com.gantoniadis.cargopulse.security.service.RefreshTokenService;
+import com.gantoniadis.cargopulse.security.util.TokenExtractionHelper;
 import com.gantoniadis.cargopulse.user.dto.UserAccountDTO;
 import com.gantoniadis.cargopulse.user.mapper.UserAccountMapper;
 import com.gantoniadis.cargopulse.user.repository.UserAccountRepository;
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
-import com.gantoniadis.cargopulse.config.properties.SecurityProperties;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -55,8 +58,168 @@ public class AuthServiceImpl implements AuthService {
 
     private final SecurityProperties securityProperties;
 
+    public UserAccountDTO getAuthenticatedUser() {
+        try {
+            // Retrieve token/username from the security context
+            String token = (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
+            String username = jwtService.extractUsername(token);
+            return userAccountMapper.userToUserDTO(userAccountRepository.findByUsername(username).
+                    orElseThrow(() ->
+                            new CustomAuthenticationException("No authorized User found for this action.")));
+        } catch (Exception e) {
+            throw new CustomAuthenticationException("No authorized User found for this action.");
+        }
+    }
+
+    // WEB Login: Calls core logic, sets HttpOnly cookie, and cleans DTO for response body.
+    @Override
+    public WebAuthenticationResponseDTO authenticateWeb(AuthenticationRequestDTO request,
+                                                           HttpServletResponse response) {
+        // Get tokens from core logic
+        var unfilteredResponseDTO = authenticate(request);
+
+        // Set the Access and Refresh Tokens as a secure HttpOnly cookie (XSS defense)
+        setAccessCookie(response, unfilteredResponseDTO.getJwt());
+        setRefreshCookie(response, unfilteredResponseDTO.getRefreshToken());
+
+        // Create the web response dto
+        return WebAuthenticationResponseDTO
+                .builder()
+                .username(unfilteredResponseDTO.getUsername())
+                .roles(unfilteredResponseDTO.getRoles())
+                .build();
+    }
+
+    // MOBILE Login: Calls the core logic and returns the DTO with both tokens.
+    @Override
+    public MobileAuthenticationResponseDTO authenticateMobile(AuthenticationRequestDTO request) {
+        return authenticate(request);
+    }
+
+    // WEB Refresh: Calls rotation logic, sets NEW HttpOnly cookie, and cleans DTO.
+    @Override
+    public WebAuthenticationResponseDTO refreshWeb(String oldAccessToken, String oldRefreshToken, HttpServletResponse response) {
+        // Core rotation logic (generates new AT/RT, blocks old RT in Redis)
+        var unfilteredResponseDTO = rotateRefreshToken(oldAccessToken, oldRefreshToken, false);
+
+        // Set the NEW Access and Refresh Tokens as a secure HttpOnly cookie
+        setAccessCookie(response, unfilteredResponseDTO.getJwt());
+        setRefreshCookie(response, unfilteredResponseDTO.getRefreshToken());
+
+        // Create the web response dto
+        return WebAuthenticationResponseDTO
+                .builder()
+                .username(unfilteredResponseDTO.getUsername())
+                .roles(unfilteredResponseDTO.getRoles())
+                .build();
+    }
+
+    // MOBILE Refresh: Calls the rotation logic. RT remains in the DTO body for mobile client.
+    @Override
+    public MobileAuthenticationResponseDTO refreshMobile(String oldAccessToken, String oldRefreshToken) {
+        return rotateRefreshToken(oldAccessToken, oldRefreshToken, true);
+    }
+
+    // LOGOUT WEB: Distinct method for web logic (AT/RT in Cookies)
+    @Override
+    public void logoutWeb(String accessToken, String refreshTokenFromCookie, HttpServletResponse response) {
+
+        // accessToken and refreshTokenFromCookie may be null if cookies expired/missing
+
+        // 1. Block AT if present
+        if (accessToken != null) {
+            try {
+                if (!jwtService.isTokenExpired(accessToken)) {
+                    Date expiration = jwtService.extractExpiration(accessToken);
+                    long remainingMillis = expiration.getTime() - System.currentTimeMillis();
+                    if (remainingMillis > 0) {
+                        blocklistService.blockToken(accessToken, Duration.ofMillis(remainingMillis));
+                        log.info("Web AT blocklisted for revocation.");
+                    }
+                } else {
+                    log.info("Skipping blocklisting of Access Token, for web logout, as it is already expired.");
+                }
+            } catch (ExpiredJwtException ex) {
+                log.info("Access Token expired during blocklist processing, for web logout, skipping blocklist and continuing rotation.");
+            } catch (Exception ex) {
+                log.warn("Error processing Web Access Token during logout: {}", ex.getMessage());
+            }
+        }
+
+        // 2. Revoke RT if present
+        if (refreshTokenFromCookie != null) {
+            try {
+                // Delete RT from Redis to instantly revoke session access
+                String username = jwtService.extractUsername(refreshTokenFromCookie);
+                var user = userAccountRepository.findByUsername(username);
+                if (user.isPresent()) {
+                    String userId = user.get().getId().toString();
+                    refreshTokenService.deleteRefreshToken(userId);
+                    log.info("Web Refresh Token revoked successfully for user {}.", username);
+                }
+            } catch (Exception ex) {
+                log.warn("Error processing Web Refresh Token during logout: {}", ex.getMessage());
+            }
+        }
+
+        // 3. Expire the HttpOnly cookies for the web client (always do this for a clean state)
+        expireAccessCookie(response);
+        expireRefreshCookie(response);
+
+        // 4. Clear the Security Context
+        SecurityContextHolder.clearContext();
+    }
+
+    // LOGOUT MOBILE: Distinct method for mobile logic (AT in Header, RT in Body)
+    @Override
+    public void logoutMobile(String authHeader, String refreshToken) {
+
+        String accessToken = TokenExtractionHelper.extractAccessTokenFromHeader(authHeader);
+
+        if (accessToken == null) {
+            throw new CustomAuthenticationException("Authorization header must contain a 'Bearer' Access Token for mobile logout.");
+        }
+
+        // 1. Block AT
+        try {
+            if (!jwtService.isTokenExpired(accessToken)) {
+                Date expiration = jwtService.extractExpiration(accessToken);
+                long remainingMillis = expiration.getTime() - System.currentTimeMillis();
+                if (remainingMillis > 0) {
+                    blocklistService.blockToken(accessToken, Duration.ofMillis(remainingMillis));
+                    log.info("Mobile AT blocklisted for revocation.");
+                }
+            } else {
+                log.info("Skipping blocklisting of Access Token, for mobile logout, as it is already expired.");
+            }
+        } catch (ExpiredJwtException ex) {
+            log.info("Access Token expired during blocklist processing, for mobile logout, skipping blocklist and continuing rotation.");
+        } catch (Exception ex) {
+            log.warn("Error processing Mobile Access Token during logout: {}", ex.getMessage());
+        }
+
+        // 2. Revoke RT
+        try {
+            // Delete RT from Redis to instantly revoke session access
+            String username = jwtService.extractUsername(refreshToken);
+            var user = userAccountRepository.findByUsername(username);
+            if (user.isPresent()) {
+                String userId = user.get().getId().toString();
+                refreshTokenService.deleteRefreshToken(userId);
+                log.info("Mobile Refresh Token revoked successfully for user {}.", username);
+            } else {
+                log.warn("Mobile RT could not be revoked: User not found for RT username.");
+            }
+        } catch (Exception ex) {
+            log.warn("Error processing Mobile Refresh Token during logout: {}", ex.getMessage());
+        }
+
+        // 3. Clear the Security Context
+        SecurityContextHolder.clearContext();
+    }
+
     // Core authentication logic: authenticates user, generates AT and RT, stores RT in Redis.
-    public AuthenticationResponseDTO authenticate(AuthenticationRequestDTO request) throws CustomAuthenticationException {
+    private MobileAuthenticationResponseDTO authenticate(AuthenticationRequestDTO request) throws CustomAuthenticationException {
         try {
             // Attempt to authenticate user credentials
             authenticationManager.authenticate(
@@ -82,7 +245,7 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenService.storeRefreshToken(userId, refreshToken);
 
         // Return both tokens - web auth caller will remove it
-        return AuthenticationResponseDTO.builder()
+        return MobileAuthenticationResponseDTO.builder()
                 .jwt(accessToken)
                 .refreshToken(refreshToken)
                 .username(userDTO.getUsername())
@@ -90,114 +253,16 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
-    public UserAccountDTO getAuthenticatedUser() {
-        try {
-            // Retrieve token/username from the security context
-            String token = (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
-            String username = jwtService.extractUsername(token);
-            return userAccountMapper.userToUserDTO(userAccountRepository.findByUsername(username).
-                    orElseThrow(() ->
-                            new CustomAuthenticationException("No authorized User found for this action.")));
-        } catch (Exception e) {
-            throw new CustomAuthenticationException("No authorized User found for this action.");
-        }
-    }
-
-    // MOBILE Login: Calls the core logic and returns the DTO with both tokens.
-    @Override
-    public AuthenticationResponseDTO authenticateMobile(AuthenticationRequestDTO request) {
-        return authenticate(request);
-    }
-
-    // WEB Login: Calls core logic, sets HttpOnly cookie, and cleans DTO for response body.
-    @Override
-    public AuthenticationResponseDTO authenticateWeb(AuthenticationRequestDTO request,
-                                                     HttpServletResponse response) {
-        // Get tokens from core logic
-        AuthenticationResponseDTO responseDTO = authenticate(request);
-
-        // Set the Refresh Token as a secure HttpOnly cookie (XSS defense)
-        setRefreshCookie(response, responseDTO.getRefreshToken());
-
-        // Remove RT from body DTO (RT is now in cookie, AT is in body)
-        responseDTO.setRefreshToken(null);
-        return responseDTO;
-    }
-
-    // MOBILE Refresh: Calls the rotation logic. RT remains in the DTO body for mobile client.
-    @Override
-    public AuthenticationResponseDTO refreshMobile(String oldAccessToken, String oldRefreshToken) {
-        return rotateRefreshToken(oldAccessToken, oldRefreshToken);
-    }
-
-    // WEB Refresh: Calls rotation logic, sets NEW HttpOnly cookie, and cleans DTO.
-    @Override
-    public AuthenticationResponseDTO refreshWeb(String oldAccessToken, String oldRefreshToken, HttpServletResponse response) {
-        // Core rotation logic (generates new AT/RT, blocks old RT in Redis)
-        AuthenticationResponseDTO responseDTO = rotateRefreshToken(oldAccessToken, oldRefreshToken);
-
-        // Set the NEW Refresh Token as a secure HttpOnly cookie
-        setRefreshCookie(response, responseDTO.getRefreshToken());
-
-        // Remove RT from body DTO
-        responseDTO.setRefreshToken(null);
-        return responseDTO;
-    }
-
-    // Universal Logout: Logic to block AT and revoke RT from Redis.
-    @Override
-    public void logout(String authHeader, String refreshToken) {
-
-        // Block the Access Token (AT)
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String accessToken = authHeader.substring(7);
-            try {
-                // Add short-lived AT to Redis blocklist until its natural expiry
-                Date expiration = jwtService.extractExpiration(accessToken);
-                long remainingMillis = expiration.getTime() - System.currentTimeMillis();
-                if (remainingMillis > 0) {
-                    blocklistService.blockToken(accessToken, Duration.ofMillis(remainingMillis));
-                }
-            }  catch (Exception ex) {
-                log.warn("Error processing Access Token during logout: {}", ex.getMessage());
-            }
-        }
-        // Revoke the Refresh Token (RT)
-        if (refreshToken != null && !refreshToken.isEmpty()) {
-            try {
-                // Delete RT from Redis to instantly revoke access
-                String username = jwtService.extractUsername(refreshToken);
-                var user = userAccountRepository.findByUsername(username);
-                if (user.isPresent()) {
-                    String userId = user.get().getId().toString();
-                    refreshTokenService.deleteRefreshToken(userId);
-                }
-            } catch (Exception ex) {
-                log.warn("Error processing Refresh Token during logout: {}", ex.getMessage());
-            }
-        }
-        // Clear the Security Context
-        SecurityContextHolder.clearContext();
-    }
-
-    // WEB Logout: Calls base logout and handles cookie expiration.
-    @Override
-    public void logoutWeb(String authHeader, String refreshTokenFromCookie, HttpServletResponse response) {
-        // Call universal logout to block AT and revoke RT
-        logout(authHeader, refreshTokenFromCookie);
-
-        // Expire the HttpOnly cookie for the web client
-        if (refreshTokenFromCookie != null) {
-            expireRefreshCookie(response);
-        }
-    }
-
     // Core logic for Refresh Token Rotation (RTR).
-    private AuthenticationResponseDTO rotateRefreshToken(String oldAccessToken, String oldRefreshToken)
+    private MobileAuthenticationResponseDTO rotateRefreshToken(String oldAccessToken, String oldRefreshToken, boolean isMobileRequest)
             throws CustomAuthenticationException {
 
+        // For web requests we can have null old AT because when it expires,
+        // the cookie is deleted too by the browser and is not sent with the request
+
         // 1. Check for Token Replay (Blocklist Check)
-        if (blocklistService.isTokenBlocklisted(oldAccessToken)) {
+        if ((isMobileRequest || oldAccessToken != null)
+                && blocklistService.isTokenBlocklisted(oldAccessToken)) {
 
             try {
                 UserAccountDTO userDTO = getUserFromRefreshToken(oldRefreshToken);
@@ -214,17 +279,27 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // 2. Blocklist the Old Access Token
-        try {
-            Date expiration = jwtService.extractExpiration(oldAccessToken);
-            long remainingMillis = expiration.getTime() - System.currentTimeMillis();
-
-            if (remainingMillis > 0) {
-                blocklistService.blockToken(oldAccessToken, Duration.ofMillis(remainingMillis));
-                log.info("Blocklisted old AT for immediate invalidation.");
+        if (oldAccessToken != null) {
+            try {
+                if (!jwtService.isTokenExpired(oldAccessToken)) {
+                    // If it's still valid, we extract expiration to calculate remaining time
+                    // This call might still throw an ExpiredJwtException in a rare race condition,
+                    // but the catch block below will handle it gracefully.
+                    Date expiration = jwtService.extractExpiration(oldAccessToken);
+                    long remainingMillis = expiration.getTime() - System.currentTimeMillis();
+                    if (remainingMillis > 0) {
+                        blocklistService.blockToken(oldAccessToken, Duration.ofMillis(remainingMillis));
+                        log.info("Blocklisted old AT for immediate invalidation.");
+                    }
+                } else {
+                    log.info("Skipping blocklisting of old Access Token as it is already expired.");
+                }
+            } catch (ExpiredJwtException ex) {
+                log.info("Old Access Token expired during blocklist processing, skipping blocklist and continuing rotation.");
+            } catch (Exception ex) {
+                log.warn("Security failure: Cannot process or blocklist old Access Token.", ex);
+                throw new CustomAuthenticationException("Invalid access token provided for rotation.");
             }
-        }  catch (Exception ex) {
-            log.warn("Security failure: Cannot process or blocklist old Access Token.", ex);
-            throw new CustomAuthenticationException("Invalid access token provided for rotation.");
         }
 
         // 3. Centralized validation and user retrieval
@@ -248,7 +323,7 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenService.storeRefreshToken(userId, newRefreshToken);
 
         // 7. Return new tokens
-        return AuthenticationResponseDTO.builder()
+        return MobileAuthenticationResponseDTO.builder()
                 .jwt(newAccessToken)
                 .refreshToken(newRefreshToken)
                 .username(userDTO.getUsername())
@@ -274,6 +349,31 @@ public class AuthServiceImpl implements AuthService {
         );
 
         return userAccountMapper.userToUserDTO(user);
+    }
+
+    // Helper method to create and attach the secure HttpOnly Access Token cookie.
+    private void setAccessCookie(HttpServletResponse response, String accessToken) {
+        long accessExpirationSec = jwtService.getExpiration() / 1000;
+        ResponseCookie cookie = ResponseCookie.from("accessToken", accessToken) // Changed name to 'accessToken'
+                .httpOnly(true) // Prevents client-side JS access (XSS defense)
+                .secure(securityProperties.getCookie().isSslTransfer()) // Must use HTTPS in prod
+                .path("/") // Path set to root (/) for ALL API endpoints
+                .maxAge(accessExpirationSec)
+                .sameSite("Strict") // CSRF defense
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    // Helper method to force cookie expiration (for logout).
+    private void expireAccessCookie(HttpServletResponse response) {
+        ResponseCookie expiredCookie = ResponseCookie.from("accessToken", "") // Changed name
+                .httpOnly(true)
+                .secure(securityProperties.getCookie().isSslTransfer())
+                .path("/") // Path set to root (/)
+                .maxAge(0) // Expires immediately
+                .sameSite("Strict")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, expiredCookie.toString());
     }
 
     // Helper method to create and attach the secure HttpOnly cookie.

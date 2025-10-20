@@ -31,6 +31,16 @@ public class OpenApiConfig {
                 .scheme("bearer")
                 // Format of the token
                 .bearerFormat("JWT")
-                .description("Enter your **JWT Bearer token** here. Example: `eyJhbGciOiJIUzI1Ni...`");
+                .description(
+                        """
+                                Enter your **JWT Bearer token** here.
+                                
+                                **Mobile Clients:** Use this field to authorize requests via the standard 'Authorization: Bearer' header.
+                                
+                                **Web Clients:** Browser-based applications use a secure, **HttpOnly cookie** for authentication. \
+                                **This field is not used by the browser.** To test endpoints as a Web user, you must first log in \
+                                via the `/api/auth/login/web` endpoint in your browser. The browser will automatically manage \
+                                the HttpOnly cookies for subsequent API calls."""
+                );
     }
 }
