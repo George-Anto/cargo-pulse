@@ -359,7 +359,7 @@ public class AuthServiceImpl implements AuthService {
                 .secure(securityProperties.getCookie().isSslTransfer()) // Must use HTTPS in prod
                 .path("/") // Path set to root (/) for ALL API endpoints
                 .maxAge(accessExpirationSec)
-                .sameSite("Strict") // CSRF defense
+                .sameSite("None") // The future frontend will be on another domain
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
@@ -371,7 +371,7 @@ public class AuthServiceImpl implements AuthService {
                 .secure(securityProperties.getCookie().isSslTransfer())
                 .path("/") // Path set to root (/)
                 .maxAge(0) // Expires immediately
-                .sameSite("Strict")
+                .sameSite("None") // The future frontend will be on another domain
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, expiredCookie.toString());
     }
@@ -384,7 +384,7 @@ public class AuthServiceImpl implements AuthService {
                 .secure(securityProperties.getCookie().isSslTransfer()) // Must use HTTPS in prod
                 .path("/api/auth") // Only sent to /api/auth endpoints (e.g., /refresh/web)
                 .maxAge(refreshExpirationSec)
-                .sameSite("Strict") // CSRF defense
+                .sameSite("None") // The future frontend will be on another domain
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
@@ -396,7 +396,7 @@ public class AuthServiceImpl implements AuthService {
                 .secure(securityProperties.getCookie().isSslTransfer())
                 .path("/api/auth")
                 .maxAge(0) // Expires immediately
-                .sameSite("Strict")
+                .sameSite("None") // The future frontend will be on another domain
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, expiredCookie.toString());
     }
