@@ -1,9 +1,17 @@
 global:
   scrape_interval: 15s
 
+# For when running the Spring Boot app in a docker container
 scrape_configs:
-  - job_name: 'cargo-pulse-local'
-    # Use 'host.docker.internal' to reach services running on the host machine (localhost)
+  - job_name: 'cargo-pulse-docker'
+    # The 'api' service is now running inside Docker, so we target the service name 'api'
     static_configs:
-      - targets: ['host.docker.internal:8080']
+      - targets: ['api:8081'] # Target the 'api' service on its internal port 8081
     metrics_path: '/actuator/prometheus'
+
+# For when running the Spring Boot app on the local set up
+#  - job_name: 'cargo-pulse-local'
+#    # Use 'host.docker.internal' to reach services running on the host machine (localhost)
+#    static_configs:
+#      - targets: ['host.docker.internal:8080']
+#    metrics_path: '/actuator/prometheus'

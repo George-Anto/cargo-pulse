@@ -49,7 +49,7 @@ spring:
       # Use "cargo-pulse-redis-password-local" secret for the local redis set up
       password: ${cargo-pulse-redis-password-azure:${redis.dev.secret}}
       ssl:
-        enabled: true # Disable ssl for local redis
+        enabled: false # Disable ssl for local redis
 
   jpa:
     hibernate:
@@ -69,6 +69,12 @@ jwt:
   refresh-expiration-ms: 604_800_000 # 7 days (7 * 24 * 60 * 60 * 1000)
 
 management:
+  server:
+    port: 8081
+    # Set this property to ensure the management port uses HTTP,
+    # NOT the main application's SSL/security configuration.
+    ssl:
+      enabled: false
   endpoints:
     web:
       exposure:

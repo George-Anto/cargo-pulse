@@ -1,68 +1,148 @@
 version: '3.8'
 
-# Run the containers with: docker-compose up -d
+# Command to run the entire stack: docker compose up --build -d
 services:
-  # 1. REDIS SERVICE
+  # ======================================================================
+  # 1. API SERVICE (Spring Boot Application)
+  #    The main application running over SSL/HTTPS.
+  # ======================================================================
+  api:
+    container_name: cargo_pulse_api
+    # Instruct Docker to build the image using the local Dockerfile (multi-stage build).
+    build: .
+    # Ensures the container automatically restarts if it crashes.
+    restart: always
+    # Maps the internal container SSL port (8443) to the host machine's port 8443.
+    ports:
+      - "8443:8443"
+    environment:
+      # Activates the 'dev' profile to load configuration from application-dev.yml.
+      SPRING_PROFILES_ACTIVE: dev
+
+      # --- Azure Key Vault Configuration (Secrets read from local .env file) ---
+      # These variables allow the Spring application to authenticate and connect to Azure Key Vault.
+      AZURE_KEYVAULT_ENDPOINT: ${AZURE_KEYVAULT_ENDPOINT}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID}
+
+      # --- Database Connection ---
+      # Overrides application-dev.yml defaults to use the Docker network's 'db' service name.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/cargopulse
+      SPRING_DATASOURCE_USERNAME: cargopulse_user # User for the 'db' container.
+      SPRING_DATASOURCE_PASSWORD: local_dev_password # Password for the 'db' container.
+
+      # --- Redis Connection ---
+      # Connects to the 'redis' service using its default port 6379 internally.
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      # Passes the Redis password, using a default value if not set in the .env file.
+      CARGOPULSE_REDIS_PASSWORD: ${CARGOPULSE_REDIS_PASSWORD:-test_pass}
+      # Controls cookie security flag; set to true for the external HTTPS port.
+      SECURITY_COOKIE_SSL_TRANSFER: ${SECURITY_COOKIE_SSL_TRANSFER:-true}
+
+      # --- Monitoring Scrape Target ---
+      # Sets the internal management endpoint address (service name:port) for Prometheus.
+      CARGOPULSE_SCRAPE_TARGET: api:8081
+
+      # --- Prometheus IP Whitelisting ---
+      # This variable configures Spring Security to allow access to the /actuator/prometheus
+      # endpoint from the Docker internal network. It whitelists the common Docker bridge
+      # subnet (172.26.0.0/16) where the Prometheus container resides.
+      CARGOPULSE_PROMETHEUS_IP: "hasIpAddress('172.26.0.0/16')"
+
+    # Ensures that dependent services are started and ready before the API attempts to connect.
+    depends_on:
+      - redis
+      - db
+      - prometheus
+    # Uses the default Docker network for communication between services.
+    networks:
+      - default
+
+  # ======================================================================
+  # 2. POSTGRESQL DATABASE SERVICE (db)
+  #    Persistent storage for application data.
+  # ======================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: cargo_pulse_postgres
+    restart: always
+    # Maps host port 5435 to container port 5432 to avoid conflicts with host DB.
+    # Host Port : Container Port
+    ports:
+      - "5435:5432"
+    environment:
+      # These standard variables initialize the database on first run.
+      POSTGRES_DB: cargopulse           # The database name Liquibase will target.
+      POSTGRES_USER: cargopulse_user    # The user the API connects with.
+      POSTGRES_PASSWORD: local_dev_password # The password for the connection user.
+
+    # Mounts a named volume for persistent storage, so data survives container restarts.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # ======================================================================
+  # 3. REDIS SERVICE (redis)
+  #    Used for JWT blocklisting and caching.
+  # ======================================================================
   redis:
     image: redis:7.2-alpine
     container_name: cargo_pulse_redis
     restart: always
+    # Exposes Redis to the host on standard port 6379 (useful for external tools).
     ports:
       - "6379:6379"
-    # Use environment variable substitution for password
+    # Starts Redis with AOF persistence and requires a password (read from .env).
     command: redis-server --appendonly yes --requirepass ${CARGOPULSE_REDIS_PASSWORD:-test_pass}
+    # Mounts a named volume for Redis persistence.
     volumes:
       - redis_data:/data
 
-  # 2. PROMETHEUS MONITORING SERVICE
-  # Prometheus is the primary monitoring system. It uses a 'pull' model to scrape (collect)
-  # time-series metrics (like CPU, memory, HTTP request counts) from the application and stores them.
+  # ======================================================================
+  # 4. PROMETHEUS MONITORING SERVICE (prometheus)
+  #    Metrics collection system that scrapes the API's actuator endpoint.
+  # ======================================================================
   prometheus:
     image: prom/prometheus:latest
     container_name: cargo_pulse_prometheus
     ports:
       - "${CARGOPULSE_PROMETHEUS_PORT:-9090}:9090"
     volumes:
-      # Mount the custom configuration file
+      # Mounts the custom Prometheus configuration file from the host.
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Mounts a named volume for Prometheus time-series database (TSDB) storage.
       - prometheus_data:/prometheus
     environment:
-      # Define the scrape target environment variable here
-      - APP_HOST_PORT=${CARGOPULSE_SCRAPE_TARGET:-host.docker.internal:8080}
+      # Passes the scrape target to Prometheus, used in the prometheus.yml config.
+      - APP_HOST_PORT=${CARGOPULSE_SCRAPE_TARGET:-api:8081}
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
 
-  # 3. GRAFANA VISUALIZATION SERVICE
-  # Grafana is the visualization layer. It queries the metrics stored in Prometheus
-  # and displays them in user-friendly dashboards.
-  #
-  #    Setup Notes for JVM Micrometer Dashboard (After running 'docker-compose up -d'):
-  # 1. Access Grafana at http://localhost:3000 and login
-  # 2. Add Prometheus Data Source:
-  #    - Configuration (gear icon) -> Data Sources -> Add Prometheus.
-  #    - HTTP URL: http://prometheus:9090 (Use the Docker service name, NOT localhost).
-  #    - Click "Save & Test".
-  # 3. Import JVM Micrometer Dashboard (ID 12900):
-  #    - Dashboards -> Import -> Enter ID 12900.
-  #    - Select the Prometheus data source created in step 2.
-  #
+  # ======================================================================
+  # 5. GRAFANA VISUALIZATION SERVICE (grafana)
+  #    Queries Prometheus and displays application dashboards.
+  # ======================================================================
   grafana:
     image: grafana/grafana:latest
     container_name: cargo_pulse_grafana
     ports:
       - "${CARGOPULSE_GRAFANA_PORT:-3000}:3000"
     environment:
-      # Use default values if environment variables are not set
+      # Sets default login credentials, which can be overridden by environment variables.
       - GF_SECURITY_ADMIN_USER=${CARGOPULSE_GRAFANA_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${CARGOPULSE_GRAFANA_PASSWORD:-admin}
+    # Mounts a named volume for persistent Grafana configuration and dashboards.
     volumes:
       - grafana_data:/var/lib/grafana
+    # Ensures Prometheus is running before attempting to start Grafana.
     depends_on:
       - prometheus
 
-# Docker Volumes for persistent data
+# Docker Volumes: Used to persist data across container restarts (e.g., DB data, Prometheus metrics).
 volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+  postgres_data:
